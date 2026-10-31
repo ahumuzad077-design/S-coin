@@ -186,13 +186,17 @@ integration. Set `EXPO_PUBLIC_SCOIN_CHAIN_ID` to the exact trusted S Coin chain
 ID when one has been established; do not guess or reuse a local test chain ID
 for production.
 
-This is an early connection and market-data stage, not a full wallet or
-exchange. It does not generate or store recovery phrases, sign transactions,
-send funds, place Binance orders, process deposits/withdrawals, or execute
-crypto swaps. Browser extension connections are supported in web builds;
-native MetaMask Connect requires a custom Expo development/native build and
-trusted RPC configuration. Keplr mobile pairing is still not configured. The
-swap panel is a quote/route preview only; it does not sign or execute trades.
+This is an early wallet and market-data stage, not a standalone self-custody
+wallet or exchange. It does not generate or store recovery phrases or private
+keys. It supports user-approved native-asset transfers through an external
+EVM wallet only on chain IDs listed in
+EXPO_PUBLIC_EVM_TRANSFER_CHAIN_IDS; the default is Sepolia testnet. It does not
+send native S Coin, transfer ERC-20 tokens, execute swaps, place Binance
+orders, or process deposits/withdrawals. Browser extension connections are
+supported in web builds; native MetaMask Connect requires a custom Expo
+development/native build and trusted RPC configuration. Keplr mobile pairing
+is still not configured. 0x and Skip integrations return quote/route previews
+only; they do not approve, sign or broadcast swaps.
 
 See [wallet and exchange integration notes](./docs/wallet-and-exchange-integration.md)
 for the architecture, security boundary, regulatory readiness and next stages.
@@ -213,11 +217,14 @@ public HTTPS service URL in `EXPO_PUBLIC_SWAP_API_URL`.
 
 The app can display a 0x quote and Skip Go Cosmos route preview, and reads
 native coin balances for connected EVM and S Coin accounts where a trusted RPC
-responds. It still does not approve tokens, sign or broadcast transactions,
-generate/store recovery phrases, or handle real funds. MetaMask Connect is
+responds. It can prepare and submit native EVM transfers on explicitly
+allowlisted networks after the user reviews the amount/fee preview and approves
+the transaction in MetaMask. The default transfer allowlist is Sepolia only.
+ERC-20 transfers, EVM swaps, Cosmos sends, seed-phrase wallet creation,
+key storage and account recovery are not implemented. MetaMask Connect is
 available in native EVM builds; Keplr mobile pairing and native Cosmos
-transaction signing remain future work. S Coin has no verified production network or registered
-DEX/IBC swap route yet. See
+transaction signing remain future work. S Coin has no verified production
+network or registered DEX/IBC swap route yet. See
 [`docs/wallet-and-exchange-integration.md`](./docs/wallet-and-exchange-integration.md)
 and [`server/swap-api/README.md`](./server/swap-api/README.md).
 
