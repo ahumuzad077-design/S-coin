@@ -29,7 +29,8 @@
     "web": "expo start --web",
     "proxy": "node proxy.mjs",
     "start:dev": "expo start --dev-client",
-    "prebuild": "expo prebuild"
+    "prebuild": "expo prebuild",
+    "test:wallet": "node --experimental-strip-types --test src/evmTransactions.test.mjs"
   },
   "private": true
 }
