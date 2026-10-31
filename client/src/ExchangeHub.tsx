@@ -18,6 +18,8 @@ import {
   fetchBinanceTickers,
   formatMarketPercent,
   formatMarketPrice,
+  subscribeBinanceTickers,
+  type BinanceStreamStatus,
 } from "./marketData";
 import {
   WalletConnection,
@@ -35,6 +37,10 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
   const [tickers, setTickers] = useState<BinanceTicker[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [marketError, setMarketError] = useState("");
+  const [streamStatus, setStreamStatus] = useState<BinanceStreamStatus>("connecting");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [watchlistOnly, setWatchlistOnly] = useState(false);
+  const [watchlist, setWatchlist] = useState<string[]>(["BTCUSDT", "ETHUSDT", "BNBUSDT"]);
   const [evmWallet, setEvmWallet] = useState<WalletConnection | null>(null);
   const [scoinWallet, setScoinWallet] = useState<WalletConnection | null>(null);
   const [walletError, setWalletError] = useState("");
@@ -60,9 +66,37 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
 
   useEffect(() => {
     void refreshMarkets();
-    const timer = setInterval(() => void refreshMarkets(), 15000);
-    return () => clearInterval(timer);
+    return subscribeBinanceTickers(
+      (nextTickers) => setTickers((current) => {
+        const merged = new Map(current.map((ticker) => [ticker.symbol, ticker]));
+        for (const ticker of nextTickers) merged.set(ticker.symbol, ticker);
+        return Array.from(merged.values()).sort(
+          (left, right) => Number(right.quoteVolume) - Number(left.quoteVolume),
+        );
+      }),
+      setStreamStatus,
+    );
   }, [refreshMarkets]);
+
+  const filteredTickers = useMemo(() => {
+    const query = searchTerm.trim().toUpperCase();
+    return tickers.filter((ticker) => {
+      const matchesSearch =
+        !query ||
+        ticker.symbol.includes(query) ||
+        ticker.symbol.replace(/USDT$/, "").includes(query);
+      const matchesWatchlist = !watchlistOnly || watchlist.includes(ticker.symbol);
+      return matchesSearch && matchesWatchlist;
+    });
+  }, [searchTerm, tickers, watchlist, watchlistOnly]);
+
+  const toggleWatchlist = (symbol: string) => {
+    setWatchlist((current) =>
+      current.includes(symbol)
+        ? current.filter((item) => item !== symbol)
+        : [...current, symbol],
+    );
+  };
 
   const selectedTicker = useMemo(
     () => tickers.find((ticker) => ticker.symbol === selectedSymbol) ?? null,
@@ -136,7 +170,11 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
               <Text style={styles.eyebrow}>BINANCE SPOT · PUBLIC DATA</Text>
               <Text style={styles.panelTitle}>Market watch</Text>
               <Text style={styles.muted}>
-                Selected USDⓈ-quoted pairs · refreshes every 15 seconds
+                {streamStatus === "live"
+                  ? "LIVE · Binance public WebSocket stream"
+                  : streamStatus === "reconnecting"
+                    ? "Reconnecting to live stream · REST snapshot remains available"
+                    : "Connecting to Binance · REST snapshot remains available"}
               </Text>
             </View>
             <Pressable
@@ -167,8 +205,37 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
             </View>
           ) : null}
 
-          {tickers.map((ticker) => {
+          <View style={styles.marketFilters}>
+            <TextInput
+              accessibilityLabel="Search cryptocurrency markets"
+              autoCapitalize="characters"
+              autoCorrect={false}
+              onChangeText={setSearchTerm}
+              placeholder="Search BTC, ETH, SOL…"
+              placeholderTextColor={palette.muted}
+              style={styles.searchInput}
+              value={searchTerm}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: watchlistOnly }}
+              onPress={() => setWatchlistOnly((current) => !current)}
+              style={[styles.watchlistFilter, watchlistOnly && styles.watchlistFilterActive]}
+            >
+              <Text style={[styles.watchlistFilterText, watchlistOnly && styles.watchlistFilterTextActive]}>
+                ★ Watchlist
+              </Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.marketCountRow}>
+            <Text style={styles.tableLabel}>{filteredTickers.length} MARKETS</Text>
+            <Text style={styles.tableLabel}>{watchlist.length} WATCHLISTED</Text>
+          </View>
+
+          {filteredTickers.map((ticker) => {
             const selected = ticker.symbol === selectedSymbol;
+            const favorite = watchlist.includes(ticker.symbol);
             const positive = Number(ticker.priceChangePercent) >= 0;
             return (
               <Pressable
@@ -205,9 +272,69 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
                     {formatMarketPercent(ticker.priceChangePercent)}
                   </Text>
                 </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={favorite ? "Remove from watchlist" : "Add to watchlist"}
+                  onPress={() => toggleWatchlist(ticker.symbol)}
+                  hitSlop={8}
+                  style={styles.favoriteButton}
+                >
+                  <Text style={[styles.favoriteGlyph, favorite && styles.favoriteGlyphActive]}>
+                    {favorite ? "★" : "☆"}
+                  </Text>
+                </Pressable>
               </Pressable>
             );
           })}
+
+          {filteredTickers.length === 0 ? (
+            <View style={styles.emptyMarkets}>
+              <Text style={styles.emptyMarketsTitle}>No matching markets</Text>
+              <Text style={styles.muted}>Try another symbol or clear the Watchlist filter.</Text>
+            </View>
+          ) : null}
+
+          {selectedTicker ? (
+            <View style={styles.selectedMarketCard}>
+              <View style={styles.selectedMarketHeading}>
+                <View>
+                  <Text style={styles.eyebrow}>SELECTED MARKET</Text>
+                  <Text style={styles.selectedMarketTitle}>
+                    {selectedTicker.symbol.replace(/USDT$/, "")} / USDT
+                  </Text>
+                </View>
+                <Text style={[
+                  styles.selectedMarketPrice,
+                  Number(selectedTicker.priceChangePercent) >= 0 ? styles.positive : styles.negative,
+                ]}>
+                  {formatMarketPrice(selectedTicker.lastPrice)}
+                </Text>
+              </View>
+              <View style={styles.marketMetricGrid}>
+                <View style={styles.marketMetric}>
+                  <Text style={styles.marketMetricLabel}>24H CHANGE</Text>
+                  <Text style={styles.marketMetricValue}>
+                    {formatMarketPercent(selectedTicker.priceChangePercent)}
+                  </Text>
+                </View>
+                <View style={styles.marketMetric}>
+                  <Text style={styles.marketMetricLabel}>24H HIGH</Text>
+                  <Text style={styles.marketMetricValue}>{formatMarketPrice(selectedTicker.highPrice)}</Text>
+                </View>
+                <View style={styles.marketMetric}>
+                  <Text style={styles.marketMetricLabel}>24H LOW</Text>
+                  <Text style={styles.marketMetricValue}>{formatMarketPrice(selectedTicker.lowPrice)}</Text>
+                </View>
+                <View style={styles.marketMetric}>
+                  <Text style={styles.marketMetricLabel}>24H VOLUME</Text>
+                  <Text style={styles.marketMetricValue}>
+                    {Number(selectedTicker.quoteVolume).toLocaleString(undefined, { maximumFractionDigits: 0 })} USDT
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ) : null}
+
           <Text style={styles.sourceNote}>
             Source: Binance public market-data API. Prices can differ from an
             executable quote and may be delayed by network conditions.
@@ -468,6 +595,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 10,
   },
+  marketFilters: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
+  searchInput: { flex: 1, minWidth: 0, minHeight: 39, borderRadius: 8, borderWidth: 1, borderColor: palette.border, backgroundColor: "#0B1111", color: palette.ink, paddingHorizontal: 11, fontSize: 10 },
+  watchlistFilter: { minHeight: 39, borderRadius: 8, borderWidth: 1, borderColor: palette.border, alignItems: "center", justifyContent: "center", paddingHorizontal: 10 },
+  watchlistFilterActive: { borderColor: "#506B3B", backgroundColor: "#1A2A20" },
+  watchlistFilterText: { color: palette.muted, fontSize: 9, fontWeight: "700" },
+  watchlistFilterTextActive: { color: palette.accent },
+  marketCountRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 5 },
+  favoriteButton: { paddingHorizontal: 6, paddingVertical: 8 },
+  favoriteGlyph: { color: palette.muted, fontSize: 14 },
+  favoriteGlyphActive: { color: palette.accent },
+  emptyMarkets: { alignItems: "center", padding: 24, gap: 7 },
+  emptyMarketsTitle: { color: palette.ink, fontSize: 12, fontWeight: "800" },
+  selectedMarketCard: { padding: 13, borderRadius: 10, backgroundColor: palette.panelRaised, marginTop: 14, borderWidth: 1, borderColor: palette.border },
+  selectedMarketHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  selectedMarketTitle: { color: palette.ink, fontSize: 13, fontWeight: "800", marginTop: 5 },
+  selectedMarketPrice: { fontSize: 14, fontWeight: "800" },
+  marketMetricGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 14 },
+  marketMetric: { minWidth: "44%", flexGrow: 1 },
+  marketMetricLabel: { color: palette.muted, fontSize: 8, fontWeight: "800", letterSpacing: 0.7 },
+  marketMetricValue: { color: palette.ink, fontSize: 10, fontWeight: "700", marginTop: 5 },
   marketRow: {
     minHeight: 61,
     flexDirection: "row",
