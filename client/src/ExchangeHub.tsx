@@ -30,7 +30,9 @@ import {
 import {
   formatTokenUnits,
   parseTokenUnits,
+  requestCosmosRoutePreview,
   requestEvmSwapQuote,
+  type CosmosRoutePreviewResponse,
 } from "./swapApi";
 import type { EvmSwapQuoteResponse } from "./swapApi";
 
@@ -60,6 +62,14 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState("");
   const [evmQuote, setEvmQuote] = useState<EvmSwapQuoteResponse | null>(null);
+  const [cosmosSourceChainId, setCosmosSourceChainId] = useState("");
+  const [cosmosDestChainId, setCosmosDestChainId] = useState("");
+  const [cosmosSourceDenom, setCosmosSourceDenom] = useState("");
+  const [cosmosDestDenom, setCosmosDestDenom] = useState("");
+  const [cosmosAmountIn, setCosmosAmountIn] = useState("1000000");
+  const [cosmosRouteLoading, setCosmosRouteLoading] = useState(false);
+  const [cosmosRouteError, setCosmosRouteError] = useState("");
+  const [cosmosRoute, setCosmosRoute] = useState<CosmosRoutePreviewResponse | null>(null);
 
   const refreshMarkets = useCallback(async () => {
     setRefreshing(true);
@@ -162,6 +172,31 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
 
   const browserWalletsAvailable = Platform.OS === "web";
   const swapApiBaseUrl = process.env.EXPO_PUBLIC_SWAP_API_URL ?? "";
+
+  const getCosmosRoutePreview = async () => {
+    setCosmosRouteLoading(true);
+    setCosmosRouteError("");
+    setCosmosRoute(null);
+    try {
+      if (!swapApiBaseUrl.trim()) {
+        throw new Error("The server-side swap quote service has not been configured for this app.");
+      }
+      const route = await requestCosmosRoutePreview(swapApiBaseUrl, {
+        sourceAssetChainId: cosmosSourceChainId.trim(),
+        sourceAssetDenom: cosmosSourceDenom.trim(),
+        destAssetChainId: cosmosDestChainId.trim(),
+        destAssetDenom: cosmosDestDenom.trim(),
+        amountIn: cosmosAmountIn.trim(),
+      });
+      setCosmosRoute(route);
+    } catch (error) {
+      setCosmosRouteError(
+        error instanceof Error ? error.message : "Could not obtain a Cosmos/IBC route preview.",
+      );
+    } finally {
+      setCosmosRouteLoading(false);
+    }
+  };
 
   const getEvmQuote = async () => {
     setQuoteLoading(true);
@@ -651,6 +686,119 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
               transaction simulation, chain checks and explicit signing must
               be completed before funds can move.
             </Text>
+          </View>
+
+          <View style={styles.panel}>
+            <Text style={styles.eyebrow}>COSMOS · IBC ROUTE PREVIEW</Text>
+            <Text style={styles.panelTitle}>Interchain swap route</Text>
+            <Text style={styles.muted}>
+              Preview routes supported by Skip Go. The provider must recognise
+              both chain IDs and assets. S Coin is not enabled by default.
+            </Text>
+            <Text style={styles.fieldLabel}>SOURCE CHAIN ID</Text>
+            <TextInput
+              accessibilityLabel="Cosmos source chain ID"
+              autoCapitalize="none"
+              autoCorrect={false}
+              onChangeText={(value) => { setCosmosSourceChainId(value); setCosmosRoute(null); }}
+              placeholder="e.g. osmosis-1"
+              placeholderTextColor={palette.muted}
+              style={styles.quoteInput}
+              value={cosmosSourceChainId}
+            />
+            <Text style={styles.fieldLabel}>SOURCE DENOM</Text>
+            <TextInput
+              accessibilityLabel="Cosmos source denomination"
+              autoCapitalize="none"
+              autoCorrect={false}
+              onChangeText={(value) => { setCosmosSourceDenom(value); setCosmosRoute(null); }}
+              placeholder="e.g. uosmo or ibc/…"
+              placeholderTextColor={palette.muted}
+              style={styles.quoteInput}
+              value={cosmosSourceDenom}
+            />
+            <Text style={styles.fieldLabel}>DESTINATION CHAIN ID</Text>
+            <TextInput
+              accessibilityLabel="Cosmos destination chain ID"
+              autoCapitalize="none"
+              autoCorrect={false}
+              onChangeText={(value) => { setCosmosDestChainId(value); setCosmosRoute(null); }}
+              placeholder="e.g. cosmoshub-4"
+              placeholderTextColor={palette.muted}
+              style={styles.quoteInput}
+              value={cosmosDestChainId}
+            />
+            <Text style={styles.fieldLabel}>DESTINATION DENOM</Text>
+            <TextInput
+              accessibilityLabel="Cosmos destination denomination"
+              autoCapitalize="none"
+              autoCorrect={false}
+              onChangeText={(value) => { setCosmosDestDenom(value); setCosmosRoute(null); }}
+              placeholder="e.g. uatom"
+              placeholderTextColor={palette.muted}
+              style={styles.quoteInput}
+              value={cosmosDestDenom}
+            />
+            <Text style={styles.fieldLabel}>AMOUNT IN BASE UNITS</Text>
+            <TextInput
+              accessibilityLabel="Cosmos source amount in base units"
+              keyboardType="number-pad"
+              onChangeText={(value) => { setCosmosAmountIn(value); setCosmosRoute(null); }}
+              placeholder="1000000"
+              placeholderTextColor={palette.muted}
+              style={styles.quoteInput}
+              value={cosmosAmountIn}
+            />
+            <Pressable
+              accessibilityRole="button"
+              disabled={cosmosRouteLoading || !swapApiBaseUrl.trim()}
+              onPress={() => void getCosmosRoutePreview()}
+              style={[
+                styles.quoteButton,
+                (cosmosRouteLoading || !swapApiBaseUrl.trim()) && styles.disabled,
+              ]}
+            >
+              {cosmosRouteLoading ? (
+                <ActivityIndicator color="#0B130B" size="small" />
+              ) : (
+                <Text style={styles.quoteButtonText}>Preview Cosmos / IBC route</Text>
+              )}
+            </Pressable>
+            {cosmosRouteError ? (
+              <Text accessibilityRole="alert" style={styles.inlineError}>
+                {cosmosRouteError}
+              </Text>
+            ) : null}
+            {cosmosRoute ? (
+              <View style={styles.quoteResult}>
+                <Text style={styles.connectedLabel}>SKIP GO · ROUTE PREVIEW</Text>
+                <Text style={styles.quoteResultValue}>
+                  Estimated output: {cosmosRoute.route.estimated_amount_out}
+                </Text>
+                {cosmosRoute.route.summary ? (
+                  <Text style={styles.muted}>{cosmosRoute.route.summary}</Text>
+                ) : null}
+                {cosmosRoute.route.chain_ids?.length ? (
+                  <Text style={styles.quoteResultMeta}>
+                    Route: {cosmosRoute.route.chain_ids.join(" → ")}
+                  </Text>
+                ) : null}
+                {cosmosRoute.route.swap_price_impact_percent ? (
+                  <Text style={styles.quoteResultMeta}>
+                    Price impact: {cosmosRoute.route.swap_price_impact_percent}%
+                  </Text>
+                ) : null}
+                {typeof cosmosRoute.route.estimated_route_duration_seconds === "number" ? (
+                  <Text style={styles.quoteResultMeta}>
+                    Estimated route time: {cosmosRoute.route.estimated_route_duration_seconds}s
+                  </Text>
+                ) : null}
+                <Text style={styles.sourceNote}>
+                  Route only. No Cosmos messages were generated, signed,
+                  broadcast, or relayed.
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
       </View>
