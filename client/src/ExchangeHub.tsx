@@ -38,11 +38,17 @@ import {
 import {
   createNativeTransferPreview,
   createErc20TransferPreview,
+  createErc20ApprovalPreview,
+  createEvmSwapPreview,
+  submitErc20Approval,
+  submitEvmSwap,
   submitNativeTransfer,
   submitErc20Transfer,
   waitForEvmTransactionReceipt,
   type NativeTransferPreview,
   type Erc20TransferPreview,
+  type Erc20ApprovalPreview,
+  type EvmSwapPreview,
 } from "./evmTransactions";
 import {
   formatTokenUnits,
@@ -57,6 +63,55 @@ import {
   formatScoin,
   getAccountBalances,
 } from "./chain";
+
+
+interface ClientSwapContractAllowlist {
+  transactionTargets: string[];
+  allowanceTargets: string[];
+}
+
+function getClientSwapContractAllowlist(chainId: string): ClientSwapContractAllowlist {
+  if (process.env.EXPO_PUBLIC_EVM_SWAP_ENABLED !== "true") {
+    throw new Error("EVM swap execution is disabled in this app build.");
+  }
+  const numericChainId = chainId.startsWith("0x")
+    ? BigInt(chainId).toString()
+    : BigInt(chainId).toString();
+  const allowedChains = (process.env.EXPO_PUBLIC_EVM_SWAP_CHAIN_IDS ?? "")
+    .split(",")
+    .map((value: string) => value.trim())
+    .filter(Boolean);
+  if (!allowedChains.includes(numericChainId)) {
+    throw new Error("This EVM network has not been explicitly enabled for swaps in this app.");
+  }
+
+  const raw = process.env.EXPO_PUBLIC_EVM_SWAP_TARGETS_JSON ?? "{}";
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("EXPO_PUBLIC_EVM_SWAP_TARGETS_JSON must be valid JSON.");
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("EVM swap targets must be a JSON object keyed by decimal chain ID.");
+  }
+  const entry = (parsed as Record<string, unknown>)[numericChainId];
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+    throw new Error("No trusted EVM swap contract allowlist exists for this network.");
+  }
+  const record = entry as Record<string, unknown>;
+  const validateTargets = (value: unknown, label: string): string[] => {
+    if (!Array.isArray(value) || value.length === 0 ||
+      value.some((address) => typeof address !== "string" || !/^0x[a-fA-F0-9]{40}$/.test(address))) {
+      throw new Error("Configure at least one valid " + label + " for this EVM network.");
+    }
+    return (value as string[]).map((address) => address.toLowerCase());
+  };
+  return {
+    transactionTargets: validateTargets(record.transactionTargets, "swap transaction target"),
+    allowanceTargets: validateTargets(record.allowanceTargets, "token allowance target"),
+  };
+}
 
 interface ExchangeHubProps {
   chainId: string;
@@ -105,6 +160,14 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState("");
   const [evmQuote, setEvmQuote] = useState<EvmSwapQuoteResponse | null>(null);
+  const [swapApprovalPreview, setSwapApprovalPreview] = useState<Erc20ApprovalPreview | null>(null);
+  const [swapPreview, setSwapPreview] = useState<EvmSwapPreview | null>(null);
+  const [swapExecutionLoading, setSwapExecutionLoading] = useState(false);
+  const [swapExecutionError, setSwapExecutionError] = useState("");
+  const [swapApprovalHash, setSwapApprovalHash] = useState("");
+  const [swapApprovalStatus, setSwapApprovalStatus] = useState("");
+  const [swapTransactionHash, setSwapTransactionHash] = useState("");
+  const [swapTransactionStatus, setSwapTransactionStatus] = useState("");
   const [cosmosSourceChainId, setCosmosSourceChainId] = useState("");
   const [cosmosDestChainId, setCosmosDestChainId] = useState("");
   const [cosmosSourceDenom, setCosmosSourceDenom] = useState("");
@@ -187,6 +250,13 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
     return subscribeEvmWalletChanges(() => {
       setEvmWallet(null);
       setEvmQuote(null);
+      setSwapApprovalPreview(null);
+      setSwapPreview(null);
+      setSwapApprovalHash("");
+      setSwapApprovalStatus("");
+      setSwapTransactionHash("");
+      setSwapTransactionStatus("");
+      setSwapExecutionError("Wallet account or network changed. Previous swap approvals and previews have been cleared.");
       setQuoteError("Your EVM wallet account or network changed. Reconnect and request a fresh quote.");
       setNativePreview(null);
       setNativeTransferHash("");
@@ -477,6 +547,13 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
       setEvmWallet(null);
       setEvmQuote(null);
       setQuoteError("");
+      setSwapApprovalPreview(null);
+      setSwapPreview(null);
+      setSwapApprovalHash("");
+      setSwapApprovalStatus("");
+      setSwapTransactionHash("");
+      setSwapTransactionStatus("");
+      setSwapExecutionError("");
       setNativePreview(null);
       setNativeTransferHash("");
       setNativeTransferStatus("");
@@ -557,7 +634,13 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
         throw new Error("The connected EVM wallet returned an invalid network ID.");
       }
 
-      const sellTokenAmount = parseTokenUnits(sellAmount, Number(sellDecimals));
+      const [actualSellDecimals, actualBuyDecimals] = await Promise.all([
+        getErc20TokenDecimals(sellToken.trim(), evmWallet.chainId),
+        getErc20TokenDecimals(buyToken.trim(), evmWallet.chainId),
+      ]);
+      setSellDecimals(String(actualSellDecimals));
+      setBuyDecimals(String(actualBuyDecimals));
+      const sellTokenAmount = parseTokenUnits(sellAmount, actualSellDecimals);
       const quote = await requestEvmSwapQuote(swapApiBaseUrl, {
         chainId: numericChainId,
         sellToken: sellToken.trim(),
@@ -566,6 +649,13 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
         taker: evmWallet.address,
         slippageBps: 100,
       });
+      setSwapApprovalPreview(null);
+      setSwapPreview(null);
+      setSwapApprovalHash("");
+      setSwapApprovalStatus("");
+      setSwapTransactionHash("");
+      setSwapTransactionStatus("");
+      setSwapExecutionError("");
       setEvmQuote(quote);
     } catch (error) {
       setQuoteError(
@@ -573,6 +663,126 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
       );
     } finally {
       setQuoteLoading(false);
+    }
+  };
+
+
+  const prepareEvmSwap = async () => {
+    setSwapExecutionLoading(true);
+    setSwapExecutionError("");
+    setSwapApprovalPreview(null);
+    setSwapPreview(null);
+    setSwapApprovalHash("");
+    setSwapApprovalStatus("");
+    setSwapTransactionHash("");
+    setSwapTransactionStatus("");
+    try {
+      if (!evmWallet || !evmQuote) {
+        throw new Error("Connect a wallet and request a fresh quote before preparing a swap.");
+      }
+      if (!evmQuote.executionEnabled) {
+        throw new Error("The quote service has not enabled execution for this chain and contract configuration.");
+      }
+      const contracts = getClientSwapContractAllowlist(evmWallet.chainId);
+      const allowanceTarget = evmQuote.quote.issues?.allowance?.spender ??
+        evmQuote.quote.allowanceTarget ?? "";
+      if (!contracts.allowanceTargets.includes(allowanceTarget.toLowerCase())) {
+        throw new Error("The 0x allowance target is not trusted by this app build.");
+      }
+      const approval = await createErc20ApprovalPreview(getActiveEvmProvider(), {
+        chainId: evmWallet.chainId,
+        from: evmWallet.address,
+        tokenAddress: evmQuote.quote.sellToken ?? "",
+        spender: allowanceTarget,
+        requiredAmount: evmQuote.quote.sellAmount ?? "",
+      });
+      if (approval.needsApproval) {
+        setSwapApprovalPreview(approval);
+      } else {
+        const preview = await createEvmSwapPreview(getActiveEvmProvider(), {
+          chainId: evmWallet.chainId,
+          from: evmWallet.address,
+          quote: evmQuote.quote,
+          receivedAt: evmQuote.receivedAt ?? 0,
+          transactionTargets: contracts.transactionTargets,
+          allowanceTargets: contracts.allowanceTargets,
+        });
+        setSwapPreview(preview);
+      }
+    } catch (error) {
+      setSwapExecutionError(
+        error instanceof Error ? error.message : "Could not prepare the EVM swap.",
+      );
+    } finally {
+      setSwapExecutionLoading(false);
+    }
+  };
+
+  const approveEvmSwapAllowance = async () => {
+    setSwapExecutionLoading(true);
+    setSwapExecutionError("");
+    try {
+      if (!evmWallet || !swapApprovalPreview) {
+        throw new Error("No token approval is waiting for review.");
+      }
+      const hash = await submitErc20Approval(getActiveEvmProvider(), swapApprovalPreview);
+      setSwapApprovalHash(hash);
+      setSwapApprovalStatus("Approval submitted. Waiting for wallet-network confirmation…");
+      setSwapApprovalPreview(null);
+      const receipt = await waitForEvmTransactionReceipt(
+        getActiveEvmProvider(),
+        evmWallet.chainId,
+        hash,
+      );
+      if (receipt.status !== "success") {
+        setSwapApprovalStatus("Token approval reverted. No swap was sent.");
+        return;
+      }
+      setSwapApprovalStatus("Exact token allowance confirmed. Request a new firm quote before swapping.");
+      setEvmQuote(null);
+    } catch (error) {
+      setSwapExecutionError(
+        error instanceof Error ? error.message : "The wallet could not approve the token allowance.",
+      );
+    } finally {
+      setSwapExecutionLoading(false);
+    }
+  };
+
+  const confirmEvmSwap = async () => {
+    setSwapExecutionLoading(true);
+    setSwapExecutionError("");
+    try {
+      if (!evmWallet || !swapPreview) {
+        throw new Error("Prepare and review the swap before continuing.");
+      }
+      const hash = await submitEvmSwap(getActiveEvmProvider(), swapPreview);
+      setSwapTransactionHash(hash);
+      setSwapTransactionStatus("Swap submitted through your wallet. Waiting for confirmation…");
+      setSwapPreview(null);
+      const receipt = await waitForEvmTransactionReceipt(
+        getActiveEvmProvider(),
+        evmWallet.chainId,
+        hash,
+      );
+      if (receipt.status === "success") {
+        setSwapTransactionStatus("Swap confirmed in block " + BigInt(receipt.blockNumber).toString() + ".");
+        setEvmQuote(null);
+        try {
+          const balance = await refreshConnectedEvmBalance();
+          setEvmWallet((current) => current ? { ...current, ...balance } : current);
+        } catch {
+          // Confirmation is still valid if a fresh balance query is temporarily unavailable.
+        }
+      } else {
+        setSwapTransactionStatus("The network marked the swap as reverted. Review the transaction receipt.");
+      }
+    } catch (error) {
+      setSwapExecutionError(
+        error instanceof Error ? error.message : "The wallet could not submit the swap.",
+      );
+    } finally {
+      setSwapExecutionLoading(false);
     }
   };
 
@@ -1383,7 +1593,9 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
             ) : null}
             {evmQuote ? (
               <View style={styles.quoteResult}>
-                <Text style={styles.connectedLabel}>0x QUOTE · NOT EXECUTED</Text>
+                <Text style={styles.connectedLabel}>
+                  {evmQuote.executionEnabled ? "0x FIRM QUOTE · WALLET APPROVAL REQUIRED" : "0x QUOTE · PREVIEW ONLY"}
+                </Text>
                 <Text style={styles.quoteResultValue}>
                   {formatTokenUnits(
                     evmQuote.quote.buyAmount ?? "0",
@@ -1407,10 +1619,121 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
                   </Text>
                 ) : null}
                 <Text style={styles.sourceNote}>
-                  This is a firm quote response, not a completed swap. The
-                  app has not signed, approved or broadcast the transaction.
-                  Re-request a fresh quote immediately before any later execution.
+                  Quote freshness is limited. Any token approval is separate and
+                  exact-amount only. The connected wallet displays and approves
+                  every approval and swap transaction; S Coin never receives keys.
                 </Text>
+              </View>
+            ) : null}
+
+            {evmQuote ? (
+              <>
+                {evmQuote.executionEnabled ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={swapExecutionLoading}
+                    onPress={() => void prepareEvmSwap()}
+                    style={[styles.quoteButton, swapExecutionLoading && styles.disabled]}
+                  >
+                    {swapExecutionLoading && !swapApprovalPreview && !swapPreview ? (
+                      <ActivityIndicator color="#0B130B" size="small" />
+                    ) : (
+                      <Text style={styles.quoteButtonText}>Check allowance & prepare swap</Text>
+                    )}
+                  </Pressable>
+                ) : (
+                  <Text style={styles.sourceNote}>
+                    Execution is off. Enable it only after the server and app have
+                    the same reviewed chain, token, Settler and AllowanceHolder
+                    allowlists. 0x does not provide testnet liquidity.
+                  </Text>
+                )}
+              </>
+            ) : null}
+            {swapApprovalPreview ? (
+              <View style={styles.quoteResult}>
+                <Text style={styles.connectedLabel}>EXACT TOKEN APPROVAL REQUIRED</Text>
+                <Text style={styles.quoteResultMeta}>
+                  Token: {shortenWalletAddress(swapApprovalPreview.tokenAddress)}
+                </Text>
+                <Text style={styles.quoteResultMeta}>
+                  Allowance contract: {shortenWalletAddress(swapApprovalPreview.spender)}
+                </Text>
+                <Text style={styles.quoteResultValue}>
+                  {formatTokenUnits(swapApprovalPreview.approvalAmount, Number(sellDecimals))} tokens
+                </Text>
+                <Text style={styles.quoteResultMeta}>
+                  Estimated approval fee: {swapApprovalPreview.estimatedGasFee ?? "—"} {evmWallet?.nativeSymbol ?? "NATIVE"}
+                </Text>
+                <Text style={styles.quoteWarning}>
+                  This grants permission for the exact sell amount only. Never
+                  approve an allowance to the Settler transaction target.
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={swapExecutionLoading}
+                  onPress={() => void approveEvmSwapAllowance()}
+                  style={[styles.quoteButton, swapExecutionLoading && styles.disabled]}
+                >
+                  {swapExecutionLoading ? (
+                    <ActivityIndicator color="#0B130B" size="small" />
+                  ) : (
+                    <Text style={styles.quoteButtonText}>Approve exact amount in MetaMask</Text>
+                  )}
+                </Pressable>
+              </View>
+            ) : null}
+            {swapPreview ? (
+              <View style={styles.quoteResult}>
+                <Text style={styles.connectedLabel}>FINAL SWAP REVIEW</Text>
+                <Text style={styles.quoteResultMeta}>
+                  Sell: {formatTokenUnits(swapPreview.quote.sellAmount ?? "0", swapPreview.sellTokenDecimals)}
+                </Text>
+                <Text style={styles.quoteResultMeta}>
+                  Token: {shortenWalletAddress(swapPreview.quote.sellToken ?? "")}
+                </Text>
+                <Text style={styles.quoteResultValue}>
+                  Receive at least {formatTokenUnits(swapPreview.quoteMinBuyAmount, swapPreview.buyTokenDecimals)}
+                </Text>
+                <Text style={styles.quoteResultMeta}>
+                  Buy token: {shortenWalletAddress(swapPreview.quote.buyToken ?? "")}
+                </Text>
+                <Text style={styles.quoteResultMeta}>
+                  Estimated network fee: {swapPreview.estimatedGasFee} {evmWallet?.nativeSymbol ?? "NATIVE"}
+                </Text>
+                <Text style={styles.quoteWarning}>
+                  Slippage, block changes and liquidity can still cause a revert.
+                  Recheck the full transaction details in MetaMask before signing.
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={swapExecutionLoading}
+                  onPress={() => void confirmEvmSwap()}
+                  style={[styles.quoteButton, swapExecutionLoading && styles.disabled]}
+                >
+                  {swapExecutionLoading ? (
+                    <ActivityIndicator color="#0B130B" size="small" />
+                  ) : (
+                    <Text style={styles.quoteButtonText}>Confirm swap in MetaMask</Text>
+                  )}
+                </Pressable>
+              </View>
+            ) : null}
+            {swapExecutionError ? (
+              <Text accessibilityRole="alert" style={styles.inlineError}>{swapExecutionError}</Text>
+            ) : null}
+            {swapApprovalHash ? (
+              <View style={styles.quoteResult}>
+                <Text style={styles.connectedLabel}>APPROVAL TRANSACTION</Text>
+                <Text selectable style={styles.quoteResultMeta}>{swapApprovalHash}</Text>
+                <Text style={styles.muted}>{swapApprovalStatus}</Text>
+              </View>
+            ) : null}
+            {swapTransactionHash ? (
+              <View style={styles.quoteResult}>
+                <Text style={styles.connectedLabel}>SWAP TRANSACTION</Text>
+                <Text selectable style={styles.quoteResultMeta}>{swapTransactionHash}</Text>
+                <Text style={styles.muted}>{swapTransactionStatus}</Text>
               </View>
             ) : null}
             <Text style={styles.sourceNote}>
