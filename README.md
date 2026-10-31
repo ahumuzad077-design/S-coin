@@ -8,6 +8,10 @@ This repository is a development/testnet starting point. It is not a launched
 public blockchain, has not been independently audited, and its testnet coins
 have no real-world value.
 
+## Multi-platform product scope
+
+The intended product is a multi-exchange crypto markets and wallet application, not a Binance-only trading terminal. It distinguishes exchange accounts, external blockchain wallets, decentralised swap routes, S Coin's own asset, provider demo environments and S Coin's internal paper-trading simulator. The full product definition, supported-provider status, simulation model, security boundaries and release requirements are documented in [the S Coin product blueprint](./docs/S-COIN-PRODUCT-BLUEPRINT.md).
+
 ## Native SQM policy and production launch status
 
 The source tree is currently named S Coin (`scoin`), not SQM. Its native base
@@ -172,9 +176,9 @@ phone. iOS native builds require macOS or a configured remote build service.
 Use only a trusted node endpoint. This app is a development client; it has not
 been security audited and is not suitable for managing real funds.
 
-## Markets and wallet connection hub (feature branch)
+## Markets and wallet connection hub
 
-The feature branch `feat/scoin-wallet-markets` adds a Markets screen to the Expo
+The app includes a Markets screen to the Expo
 client. It reads public Binance Spot market data for selected USDT pairs and
 supports browser-injected EVM wallet connections, MetaMask Connect sessions in
 native Android/iOS builds, and Keplr connections for a preconfigured S Coin
@@ -209,7 +213,7 @@ The Markets screen now includes a Binance public REST snapshot plus a
 reconnecting public WebSocket feed, search, local watchlist and 24-hour market
 metrics. See `client/.env.example` for the public endpoint settings.
 
-The feature branch also includes a service in `server/swap-api/` with a
+The app also includes a service in `server/swap-api/` with a
 0x EVM quote endpoint and a Skip Go Cosmos/IBC route-preview endpoint. EVM swap
 execution is gated off by default and requires exact server and app chain,
 token, transaction-target and allowance-spender allowlists. Keep
