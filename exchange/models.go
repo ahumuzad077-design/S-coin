@@ -5,6 +5,7 @@ import "time"
 type Principal struct {
 	Subject        string
 	Email          string
+	EmailVerified  bool
 	OrganizationID string
 	Roles          map[string]struct{}
 }
