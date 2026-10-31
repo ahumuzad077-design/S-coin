@@ -73,7 +73,7 @@ The app uses Binance's official public market-data host and stream host:
 - REST: \`https://data-api.binance.vision\`
 - WebSocket: \`wss://data-stream.binance.vision\`
 
-The selected ticker stream updates last price, 24-hour percentage change,
+The all-market 24-hour ticker stream updates last price, 24-hour percentage change,
 high, low, and quote volume. The feed reconnects with backoff and recycles its
 connection before Binance's 24-hour connection limit. Binance confirms that
 these market-data-only endpoints do not require authentication; User Data
