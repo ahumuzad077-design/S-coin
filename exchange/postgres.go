@@ -97,7 +97,16 @@ func (s *PostgresStore) CreateIssuerApplication(ctx context.Context, principal P
 			(legal_name, registration_country, registration_number, registered_address, website)
 		VALUES ($1,$2,$3,$4,$5)
 		ON CONFLICT (registration_country, registration_number)
-		DO UPDATE SET updated_at = now()
+		DO UPDATE SET
+			registered_address = CASE
+				WHEN exchange_organisations.verification_status = 'PENDING_VERIFICATION' THEN EXCLUDED.registered_address
+				ELSE exchange_organisations.registered_address
+			END,
+			website = CASE
+				WHEN exchange_organisations.verification_status = 'PENDING_VERIFICATION' THEN EXCLUDED.website
+				ELSE exchange_organisations.website
+			END,
+			updated_at = now()
 		WHERE lower(trim(exchange_organisations.legal_name)) = lower(trim(EXCLUDED.legal_name))
 		RETURNING id::text`,
 		strings.TrimSpace(input.LegalName), strings.ToUpper(strings.TrimSpace(input.RegistrationCountry)),
