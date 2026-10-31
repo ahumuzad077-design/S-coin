@@ -31,6 +31,7 @@ func (s *testStore) CreateIssuerApplication(_ context.Context, p Principal, in I
 		ProposedSecurityType: in.ProposedSecurityType,
 		Status: "SUBMITTED",
 		SubmittedBy: p.Subject,
+		ApplicantOrganisationID: p.OrganizationID,
 		CreatedAt: time.Now().UTC(),
 	}
 	return s.application, nil
@@ -63,7 +64,7 @@ func (s *testStore) Close() error { return nil }
 
 func TestIssuerApplicationEndpointRequiresVerifiedApplicant(t *testing.T) {
 	store := &testStore{}
-	principal := Principal{Subject:"issuer-1", Email:"director@company.example", EmailVerified:true, Roles:map[string]struct{}{"ISSUER_APPLICANT":{}}}
+	principal := Principal{Subject:"issuer-1", Email:"director@company.example", EmailVerified:true, OrganizationID:"tenant-company-1", Roles:map[string]struct{}{"ISSUER_APPLICANT":{}}}
 	handler := NewHTTPHandler(store, testAuthenticator{principal}, "MERIDIAN MARKET OPERATOR")
 	body := `{"legalName":"Company Limited","registrationCountry":"UG","registrationNumber":"REG-10001","registeredAddress":"Kampala, Uganda","website":"https://company.example","applicantEmail":"director@company.example","applicantPhone":"+256700000000","proposedSecurityType":"EQUITY","proposedMarketSegment":"GROWTH","businessDescription":"A company with a business model and a documented plan to raise capital for its operating activities.","capitalSeekingMinor":1000000000,"currency":"UGX"}`
 	request := httptest.NewRequest(http.MethodPost, "/v1/issuer-applications", strings.NewReader(body))
@@ -78,7 +79,7 @@ func TestIssuerApplicationEndpointRequiresVerifiedApplicant(t *testing.T) {
 
 func TestIssuerApplicationEndpointRejectsUnverifiedEmail(t *testing.T) {
 	store := &testStore{}
-	principal := Principal{Subject:"issuer-1", Email:"director@company.example", EmailVerified:false, Roles:map[string]struct{}{"ISSUER_APPLICANT":{}}}
+	principal := Principal{Subject:"issuer-1", Email:"director@company.example", EmailVerified:false, OrganizationID:"tenant-company-1", Roles:map[string]struct{}{"ISSUER_APPLICANT":{}}}
 	handler := NewHTTPHandler(store, testAuthenticator{principal}, "MERIDIAN MARKET OPERATOR")
 	body := `{"legalName":"Company Limited","registrationCountry":"UG","registrationNumber":"REG-10001","registeredAddress":"Kampala, Uganda","website":"","applicantEmail":"director@company.example","applicantPhone":"+256700000000","proposedSecurityType":"EQUITY","proposedMarketSegment":"GROWTH","businessDescription":"A company with a business model and a documented plan to raise capital for its operating activities.","capitalSeekingMinor":1000000000,"currency":"UGX"}`
 	request := httptest.NewRequest(http.MethodPost, "/v1/issuer-applications", strings.NewReader(body))
@@ -92,13 +93,29 @@ func TestIssuerApplicationEndpointRejectsUnverifiedEmail(t *testing.T) {
 
 func TestIssuerCannotReadAnotherApplicantsApplication(t *testing.T) {
 	store := &testStore{application:IssuerApplication{ID:"2db3c8f4-6b7e-4a1d-8b09-0e6fdbcc5f10",SubmittedBy:"different-issuer"}}
-	principal := Principal{Subject:"issuer-1", EmailVerified:true, Roles:map[string]struct{}{"ISSUER_APPLICANT":{}}}
+	principal := Principal{Subject:"issuer-1", EmailVerified:true, OrganizationID:"tenant-other", Roles:map[string]struct{}{"ISSUER_APPLICANT":{}}}
 	handler := NewHTTPHandler(store, testAuthenticator{principal}, "MERIDIAN MARKET OPERATOR")
 	request := httptest.NewRequest(http.MethodGet, "/v1/issuer-applications/2db3c8f4-6b7e-4a1d-8b09-0e6fdbcc5f10", nil)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("cross-applicant access must be hidden, got status %d", response.Code)
+	}
+}
+
+func TestAnotherAuthorisedUserInSameOrganisationCanReadApplication(t *testing.T) {
+	store := &testStore{application:IssuerApplication{
+		ID:"2db3c8f4-6b7e-4a1d-8b09-0e6fdbcc5f10",
+		SubmittedBy:"director-1",
+		ApplicantOrganisationID:"tenant-company-1",
+	}}
+	principal := Principal{Subject:"director-2", OrganizationID:"tenant-company-1", EmailVerified:true, Roles:map[string]struct{}{"ISSUER_APPLICANT":{}}}
+	handler := NewHTTPHandler(store, testAuthenticator{principal}, "MERIDIAN MARKET OPERATOR")
+	request := httptest.NewRequest(http.MethodGet, "/v1/issuer-applications/2db3c8f4-6b7e-4a1d-8b09-0e6fdbcc5f10", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("same verified organisation should access its application, got status %d", response.Code)
 	}
 }
 
