@@ -18,6 +18,7 @@ var (
 )
 
 var registrationNumberPattern = regexp.MustCompile("^[A-Za-z0-9][A-Za-z0-9./-]{1,63}$")
+var countryCodePattern = regexp.MustCompile("^[A-Z]{2}$")
 
 var validSecurityTypes = map[string]struct{}{
 	"EQUITY": {}, "CORPORATE_BOND": {}, "INFRASTRUCTURE_BOND": {},
@@ -30,7 +31,7 @@ var validMarketSegments = map[string]struct{}{
 
 func ValidateIssuerApplication(in IssuerApplicationInput) error {
 	if !validText(in.LegalName, 3, 200) ||
-		!validText(in.RegistrationCountry, 2, 2) ||
+		!countryCodePattern.MatchString(strings.ToUpper(strings.TrimSpace(in.RegistrationCountry))) ||
 		!registrationNumberPattern.MatchString(strings.TrimSpace(in.RegistrationNumber)) ||
 		!validText(in.RegisteredAddress, 5, 500) ||
 		!validText(in.ApplicantEmail, 5, 254) ||
