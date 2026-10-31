@@ -752,8 +752,8 @@ export async function createEvmSwapPreview(
   ]);
 
   const [sellDecimals, buyDecimals] = await Promise.all([
-    readTokenDecimals(provider, quote.sellToken),
-    readTokenDecimals(provider, quote.buyToken),
+    readTokenDecimals(provider, sellToken),
+    readTokenDecimals(provider, buyToken),
   ]);
   const sellAmount = BigInt(sellAmountText);
   const buyAmount = BigInt(buyAmountText);
