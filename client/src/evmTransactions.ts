@@ -569,7 +569,10 @@ export async function createErc20ApprovalPreview(
     to: request.spender,
     amount: "1",
   });
-  await assertContractExists(provider, request.tokenAddress, "sell token contract");
+  await Promise.all([
+    assertContractExists(provider, request.tokenAddress, "sell token contract"),
+    assertContractExists(provider, request.spender, "0x allowance spender"),
+  ]);
 
   const [allowance, balance, nativeBalance] = await Promise.all([
     readAllowance(provider, request.tokenAddress, request.from, request.spender),
@@ -702,7 +705,7 @@ export async function createEvmSwapPreview(
   if (normalizeChainId(String(quote.chainId ?? "")) !== normalizeChainId(request.chainId)) {
     throw new Error("The swap quote belongs to a different EVM network.");
   }
-  if (!Number.isFinite(request.receivedAt) || Date.now() - request.receivedAt > (request.maxQuoteAgeMs ?? 45_000)) {
+  if (!Number.isFinite(request.receivedAt) || Date.now() - request.receivedAt > (request.maxQuoteAgeMs ?? 20_000)) {
     throw new Error("This swap quote has expired. Request a fresh quote before proceeding.");
   }
 
@@ -736,6 +739,8 @@ export async function createEvmSwapPreview(
   await Promise.all([
     assertContractExists(provider, quote.sellToken, "sell token contract"),
     assertContractExists(provider, quote.buyToken, "buy token contract"),
+    assertContractExists(provider, transaction.to, "0x swap transaction target"),
+    assertContractExists(provider, allowanceTarget, "0x allowance spender"),
   ]);
 
   const [sellDecimals, buyDecimals] = await Promise.all([
