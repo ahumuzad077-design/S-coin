@@ -196,3 +196,24 @@ See [wallet and exchange integration notes](./docs/wallet-and-exchange-integrati
 for the architecture, security boundary, regulatory readiness and next stages.
 Do not use this client to manage real funds; independent security review and
 production readiness gates remain outstanding.
+
+## Markets, wallet and quote service
+
+The Markets screen now includes a Binance public REST snapshot plus a
+reconnecting public WebSocket feed, search, local watchlist and 24-hour market
+metrics. See `client/.env.example` for the public endpoint settings.
+
+The feature branch also includes a **quote-only** service in
+`server/swap-api/`. It supports a protected 0x EVM quote endpoint and a Skip
+Go Cosmos/IBC route-preview endpoint. Configure the service-side chain and
+token allowlists and keep `ZEROX_API_KEY` on the server. Configure only the
+public HTTPS service URL in `EXPO_PUBLIC_SWAP_API_URL`.
+
+The app can display a 0x quote, but it still does not approve tokens, sign or
+broadcast transactions, generate/store recovery phrases, or handle real funds.
+Cosmos wallet access is browser Keplr account lookup only; native mobile
+MetaMask Connect/WalletConnect sessions and native Cosmos transaction signing
+remain future work. S Coin has no verified production network or registered
+DEX/IBC swap route yet. See
+[`docs/wallet-and-exchange-integration.md`](./docs/wallet-and-exchange-integration.md)
+and [`server/swap-api/README.md`](./server/swap-api/README.md).
