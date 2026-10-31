@@ -100,6 +100,23 @@ func NewHTTPHandler(store Store, auth Authenticator, legalName string) http.Hand
 			writeJSON(w, http.StatusOK, map[string]any{"events": events, "count": len(events)})
 			return
 		}
+		if len(parts) == 2 && parts[1] == "company-verification" && r.Method == http.MethodPost {
+			if !p.HasRole("EXCHANGE_COMPLIANCE") && !p.HasRole("EXCHANGE_ADMIN") {
+				writeError(w, http.StatusForbidden, "forbidden", "Exchange compliance access is required to verify official company registration.")
+				return
+			}
+			var verification CompanyVerificationInput
+			if err := decodeJSON(w, r, &verification, 16*1024); err != nil || ValidateCompanyVerification(verification) != nil {
+				writeError(w, http.StatusUnprocessableEntity, "invalid_verification", "Provide VERIFIED or REJECTED, an HTTPS official registry evidence URL and a reason.")
+				return
+			}
+			requestID, err := newRequestID()
+			if err != nil { writeError(w, http.StatusInternalServerError, "request_id_failed", "The request could not be safely recorded."); return }
+			updated, err := store.VerifyOrganisationRegistration(r.Context(), p, id, verification, requestID)
+			if err != nil { writeStoreError(w, err); return }
+			writeJSON(w, http.StatusOK, updated)
+			return
+		}
 		if len(parts) == 2 && parts[1] == "decisions" && r.Method == http.MethodPost {
 			if !p.HasRole("EXCHANGE_REVIEW_OFFICER") && !p.HasRole("EXCHANGE_COMPLIANCE") && !p.HasRole("EXCHANGE_ADMIN") {
 				writeError(w, http.StatusForbidden, "forbidden", "Exchange review authority is required.")
