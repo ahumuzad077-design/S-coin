@@ -33,6 +33,7 @@ type IssuerApplicationInput struct {
 type IssuerApplication struct {
 	ID                    string    `json:"id"`
 	LegalName             string    `json:"legalName"`
+OrganisationVerificationStatus string `json:"organisationVerificationStatus"`
 	RegistrationCountry   string    `json:"registrationCountry"`
 	RegistrationNumber    string    `json:"registrationNumber"`
 	RegisteredAddress     string    `json:"registeredAddress"`
