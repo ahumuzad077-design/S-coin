@@ -176,9 +176,9 @@ been security audited and is not suitable for managing real funds.
 
 The feature branch `feat/scoin-wallet-markets` adds a Markets screen to the Expo
 client. It reads public Binance Spot market data for selected USDT pairs and
-supports browser-injected MetaMask-compatible EVM account connections, native
-MetaMask Connect sessions in Android/iOS builds, and Keplr connections for a
-preconfigured S Coin Cosmos chain.
+supports browser-injected EVM wallet connections, MetaMask Connect sessions in
+native Android/iOS builds, and Keplr connections for a preconfigured S Coin
+Cosmos chain.
 
 Run the existing app as described above, then open **Markets** in the app
 navigation. No new package installation is required for this initial browser
@@ -211,11 +211,12 @@ Go Cosmos/IBC route-preview endpoint. Configure the service-side chain and
 token allowlists and keep `ZEROX_API_KEY` on the server. Configure only the
 public HTTPS service URL in `EXPO_PUBLIC_SWAP_API_URL`.
 
-The app can display a 0x quote, but it still does not approve tokens, sign or
-broadcast transactions, generate/store recovery phrases, or handle real funds.
-Cosmos wallet access is browser Keplr account lookup only; native mobile
-MetaMask Connect/WalletConnect sessions and native Cosmos transaction signing
-remain future work. S Coin has no verified production network or registered
+The app can display a 0x quote and Skip Go Cosmos route preview, and reads
+native coin balances for connected EVM and S Coin accounts where a trusted RPC
+responds. It still does not approve tokens, sign or broadcast transactions,
+generate/store recovery phrases, or handle real funds. MetaMask Connect is
+available in native EVM builds; Keplr mobile pairing and native Cosmos
+transaction signing remain future work. S Coin has no verified production network or registered
 DEX/IBC swap route yet. See
 [`docs/wallet-and-exchange-integration.md`](./docs/wallet-and-exchange-integration.md)
 and [`server/swap-api/README.md`](./server/swap-api/README.md).
