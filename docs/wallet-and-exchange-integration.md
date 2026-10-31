@@ -37,6 +37,14 @@ centralized exchange, broker, custodian or live swap service.
   through the configured Cosmos REST API.
 - The connections use external wallets. S Coin does not receive or store
   recovery phrases or private keys.
+- Native EVM asset transfers have a two-step amount/fee preview and then call
+  the connected wallet's `eth_sendTransaction` method. The wallet owner must
+  approve the transaction in MetaMask. The exact chain must be included in
+  `EXPO_PUBLIC_EVM_TRANSFER_CHAIN_IDS`; the default is Sepolia only.
+- The app checks the account and chain again before submission, estimates gas,
+  checks the balance against amount plus estimated fee, validates the returned
+  transaction hash, and polls for a transaction receipt. A fee estimate is not
+  a guaranteed final network fee.
 
 ### Quote and route previews
 
@@ -110,6 +118,10 @@ client builds and must contain public configuration only, never secrets.
   EVM hex chain IDs to trusted HTTPS RPC URLs. Defaults in the source cover
   Ethereum, Sepolia, Polygon, Optimism, Arbitrum, Base and BNB Chain. Public
   RPCs have no uptime guarantee; replace them with production RPC services.
+- EXPO_PUBLIC_EVM_TRANSFER_CHAIN_IDS: comma-separated EVM hex chain IDs where
+  native-asset sending is enabled. The default is `0xaa36a7` (Sepolia). Do
+  not add mainnets before testnet validation, a security review and an explicit
+  operational decision.
 
 ### Web development
 
@@ -166,8 +178,11 @@ HTTPS, monitoring and abuse controls.
 - No S Coin Cosmos transaction signing, send/receive, fee calculation or
   transaction monitoring.
 - No native Keplr/Cosmos mobile wallet pairing.
-- No EVM token allowance/approval, transaction signing, swap execution,
-  broadcast, receipt tracking, cross-chain recovery or refund workflow.
+- Native EVM asset sending is limited to explicitly configured chain IDs
+  (Sepolia only by default) and always requires the external wallet's explicit
+  approval. This is not an independent S Coin self-custody wallet.
+- No ERC-20 token transfers, token allowance/approval flows, EVM swap signing
+  or execution, cross-chain transaction broadcast, recovery or refund workflow.
 - No Skip Go /msgs generation/signing/broadcast. A route preview is not an
   IBC transaction.
 - No authenticated Binance account balances, user-data streams, orders,
@@ -189,10 +204,11 @@ An executable swap requires more than a route response:
    reviewed and confirmed by the wallet owner.
 4. Simulate the transaction and estimate gas; enforce slippage, minimum output,
    price impact, expiry, maximum fees and token/chain restrictions.
-5. Show the final transaction details and ask the user to sign in their own
+5. Show final transaction details and ask the user to sign in their own
    wallet. S Coin must not collect a recovery phrase or wallet private key.
 6. Track transaction receipts and provide safe failure, timeout and
-   cross-chain recovery procedures.
+   cross-chain recovery procedures. Native EVM transfers use this wallet-
+   approval pattern; the more complex swap execution sequence remains disabled.
 
 0x supports EVM quotes and transaction calldata on supported networks. Skip Go
 can return routing information for supported Cosmos/IBC and EVM routes. Neither
