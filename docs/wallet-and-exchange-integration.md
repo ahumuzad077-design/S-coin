@@ -74,7 +74,8 @@ The app uses Binance's official public market-data host and stream host:
 - WebSocket: \`wss://data-stream.binance.vision\`
 
 The all-market 24-hour ticker stream updates last price, 24-hour percentage change,
-high, low, and quote volume. The feed reconnects with backoff and recycles its
+high, low, and quote volume. A selected market loads a read-only REST snapshot
+of 24 hourly candles, 10 bid and ask levels, and the 10 most recent trades. The feed reconnects with backoff and recycles its
 connection before Binance's 24-hour connection limit. Binance confirms that
 these market-data-only endpoints do not require authentication; User Data
 Streams are not available on the market-data-only host.
