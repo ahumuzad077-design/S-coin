@@ -92,6 +92,7 @@ export function formatTokenUnits(amount: string, decimals: number): string {
 export async function requestEvmSwapQuote(
   baseUrl: string,
   request: EvmSwapQuoteRequest,
+  fetchImpl: typeof fetch = fetch,
 ): Promise<EvmSwapQuoteResponse> {
   const normalizedUrl = baseUrl.trim().replace(/\/+$/, "");
   if (!/^https:\/\/[^/]+$/i.test(normalizedUrl)) {
@@ -102,7 +103,7 @@ export async function requestEvmSwapQuote(
   const timeout = setTimeout(() => controller.abort(), 15_000);
 
   try {
-    const response = await fetch(normalizedUrl + "/v1/evm/quote", {
+    const response = await fetchImpl(normalizedUrl + "/v1/evm/quote", {
       method: "POST",
       headers: {
         Accept: "application/json",
