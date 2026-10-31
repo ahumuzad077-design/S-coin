@@ -1,6 +1,3 @@
-import { createEVMClient } from "@metamask/connect-evm";
-import { Linking, Platform } from "react-native";
-
 export type WalletKind = "cosmos" | "evm";
 
 export interface WalletConnection {
@@ -28,20 +25,6 @@ interface EvmProvider {
 }
 
 let activeEvmProvider: EvmProvider | null = null;
-type MetaMaskConnectClient = Awaited<ReturnType<typeof createEVMClient>>;
-let nativeMetaMaskClient: MetaMaskConnectClient | null = null;
-let nativeMetaMaskClientPromise: ReturnType<typeof createEVMClient> | null = null;
-
-const defaultEvmNetworks: Record<string, string> = {
-  "0x1": "https://ethereum-rpc.publicnode.com",
-  "0xaa36a7": "https://ethereum-sepolia-rpc.publicnode.com",
-  "0x89": "https://polygon-bor-rpc.publicnode.com",
-  "0xa": "https://optimism-rpc.publicnode.com",
-  "0xa4b1": "https://arbitrum-one-rpc.publicnode.com",
-  "0x2105": "https://base-rpc.publicnode.com",
-  "0x38": "https://bsc-rpc.publicnode.com",
-};
-
 const evmNativeSymbols: Record<string, string> = {
   "0x1": "ETH",
   "0xaa36a7": "ETH",
@@ -85,77 +68,6 @@ async function readEvmNativeBalance(
   } catch {
     // Wallet permission/network issues should not prevent the address connection.
     return { nativeSymbol };
-  }
-}
-
-function getSupportedEvmNetworks(): Record<string, string> {
-  const configured = process.env.EXPO_PUBLIC_METAMASK_SUPPORTED_NETWORKS_JSON;
-  if (!configured?.trim()) return defaultEvmNetworks;
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(configured);
-  } catch {
-    throw new Error("EXPO_PUBLIC_METAMASK_SUPPORTED_NETWORKS_JSON must be valid JSON.");
-  }
-
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    throw new Error("MetaMask supported networks must be a JSON object of chain IDs and HTTPS RPC URLs.");
-  }
-
-  const networks: Record<string, string> = {};
-  for (const [chainId, rpcUrl] of Object.entries(parsed)) {
-    if (
-      !/^0x[0-9a-fA-F]+$/.test(chainId) ||
-      typeof rpcUrl !== "string" ||
-      !/^https:\/\/[^\s]+$/i.test(rpcUrl)
-    ) {
-      throw new Error("Each MetaMask network must use a hex chain ID and trusted HTTPS RPC URL.");
-    }
-    networks[chainId.toLowerCase()] = rpcUrl;
-  }
-
-  if (Object.keys(networks).length === 0) {
-    throw new Error("Configure at least one EVM network before connecting MetaMask.");
-  }
-  return networks;
-}
-
-async function getNativeMetaMaskClient(): Promise<MetaMaskConnectClient> {
-  if (nativeMetaMaskClient) return nativeMetaMaskClient;
-  if (!nativeMetaMaskClientPromise) {
-    const supportedNetworks = getSupportedEvmNetworks();
-    const appUrl =
-      process.env.EXPO_PUBLIC_SCOIN_DAPP_URL ??
-      "https://github.com/ahumuzad077-design/S-coin";
-
-    if (!/^https:\/\/[^\s]+$/i.test(appUrl)) {
-      throw new Error("EXPO_PUBLIC_SCOIN_DAPP_URL must be a public HTTPS URL.");
-    }
-
-    nativeMetaMaskClientPromise = createEVMClient({
-      dapp: {
-        name: "S Coin",
-        url: appUrl,
-      },
-      api: {
-        supportedNetworks,
-      },
-      ui: {
-        preferExtension: false,
-      },
-      mobile: {
-        preferredOpenLink: (deeplink: string) => Linking.openURL(deeplink),
-      },
-    });
-  }
-
-  try {
-    nativeMetaMaskClient = await nativeMetaMaskClientPromise;
-    return nativeMetaMaskClient;
-  } catch (error) {
-    nativeMetaMaskClientPromise = null;
-    throw error;
   }
 }
 
@@ -242,39 +154,6 @@ function getWalletWindow(): WalletWindow {
  * It never requests a seed phrase or signs/submits a transaction.
  */
 export async function connectEvmWallet(): Promise<WalletConnection> {
-  if (Platform.OS !== "web") {
-    const client = await getNativeMetaMaskClient();
-    const result = await client.connect({
-      chainIds: Object.keys(getSupportedEvmNetworks()) as `0x${string}`[],
-    });
-
-    if (
-      !Array.isArray(result.accounts) ||
-      typeof result.accounts[0] !== "string" ||
-      !/^0x[a-fA-F0-9]{40}$/.test(result.accounts[0]) ||
-      typeof result.chainId !== "string" ||
-      !/^0x[0-9a-fA-F]+$/.test(result.chainId)
-    ) {
-      throw new Error("MetaMask Connect returned an invalid account or chain ID.");
-    }
-
-    nativeMetaMaskClient = client;
-    const provider = client.getProvider() as unknown as EvmProvider;
-    activeEvmProvider = provider;
-    const nativeBalance = await readEvmNativeBalance(
-      provider,
-      result.accounts[0],
-      result.chainId,
-    );
-    return {
-      kind: "evm",
-      name: "MetaMask Connect",
-      address: result.accounts[0],
-      chainId: result.chainId,
-      ...nativeBalance,
-    };
-  }
-
   const { provider, name } = await discoverEvmProvider();
   const accounts = await provider.request({ method: "eth_requestAccounts" });
   if (
@@ -302,13 +181,7 @@ export async function connectEvmWallet(): Promise<WalletConnection> {
 }
 
 export async function disconnectEvmWallet(): Promise<void> {
-  const client = nativeMetaMaskClient;
-  nativeMetaMaskClient = null;
   activeEvmProvider = null;
-
-  if (client) {
-    await client.disconnect();
-  }
 }
 
 export function subscribeEvmWalletChanges(onChange: () => void): () => void {
