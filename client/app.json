@@ -8,7 +8,12 @@
     "userInterfaceStyle": "dark",
     "ios": {
       "bundleIdentifier": "com.scoin.client",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "metamask"
+        ]
+      }
     },
     "android": {
       "package": "com.scoin.client",
@@ -23,6 +28,7 @@
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
-    }
+    },
+    "scheme": "scoin"
   }
 }
