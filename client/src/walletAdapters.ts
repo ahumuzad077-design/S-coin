@@ -77,6 +77,12 @@ export async function connectEvmWallet(): Promise<WalletConnection> {
 export async function connectScoinWallet(
   chainId: string,
 ): Promise<WalletConnection> {
+  if (!chainId.trim()) {
+    throw new Error(
+      "Connect to a trusted S Coin node or configure EXPO_PUBLIC_SCOIN_CHAIN_ID before connecting a wallet.",
+    );
+  }
+
   const provider = getWalletWindow().keplr;
   if (!provider) {
     throw new Error(
