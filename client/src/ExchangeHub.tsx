@@ -993,8 +993,10 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
             ) : null}
 
             <Text style={styles.sourceNote}>
-              S Coin never asks for a recovery phrase here. Connecting displays
-              a public address only; this release does not sign or send funds.
+              S Coin never asks for a recovery phrase or private key. EVM
+              transfers are sent only after you approve them in your external
+              wallet on configured networks. Native S Coin transfers and swaps
+              remain disabled in this release.
             </Text>
           </View>
 
