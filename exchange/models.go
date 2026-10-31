@@ -47,6 +47,7 @@ OrganisationVerificationStatus string `json:"organisationVerificationStatus"`
 	Currency              string    `json:"currency"`
 	Status                string    `json:"status"`
 	SubmittedBy           string    `json:"submittedBy"`
+	ApplicantOrganisationID string `json:"-"`
 	AssignedTo            string    `json:"assignedTo,omitempty"`
 	CreatedAt             time.Time `json:"createdAt"`
 	UpdatedAt             time.Time `json:"updatedAt"`
