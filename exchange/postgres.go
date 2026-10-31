@@ -256,10 +256,18 @@ func (s *PostgresStore) DecideIssuerApplication(ctx context.Context, principal P
 	if err != nil { return IssuerApplication{}, err }
 	defer tx.Rollback()
 
-	var current string
-	err = tx.QueryRowContext(ctx, "SELECT status FROM exchange_issuer_applications WHERE id = $1 FOR UPDATE", applicationID).Scan(&current)
+	var current, registrationStatus string
+	err = tx.QueryRowContext(ctx, `
+		SELECT a.status, o.verification_status
+		FROM exchange_issuer_applications a
+		JOIN exchange_organisations o ON o.id = a.organisation_id
+		WHERE a.id = $1
+		FOR UPDATE OF a, o`, applicationID).Scan(&current, &registrationStatus)
 	if errors.Is(err, sql.ErrNoRows) { return IssuerApplication{}, ErrNotFound }
 	if err != nil { return IssuerApplication{}, err }
+	if decision.Decision == "DUE_DILIGENCE" && registrationStatus != "VERIFIED" {
+		return IssuerApplication{}, ErrPrerequisiteNotMet
+	}
 	next, err := NextApplicationStatus(current, decision.Decision)
 	if err != nil { return IssuerApplication{}, err }
 
