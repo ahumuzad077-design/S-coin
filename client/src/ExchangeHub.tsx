@@ -41,13 +41,19 @@ import {
   type CosmosRoutePreviewResponse,
 } from "./swapApi";
 import type { EvmSwapQuoteResponse } from "./swapApi";
+import {
+  CoinBalance,
+  formatScoin,
+  getAccountBalances,
+} from "./chain";
 
 interface ExchangeHubProps {
   chainId: string;
   compact: boolean;
+  apiUrl: string;
 }
 
-export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
+export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
   const [tickers, setTickers] = useState<BinanceTicker[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [marketError, setMarketError] = useState("");
@@ -57,6 +63,8 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
   const [watchlist, setWatchlist] = useState<string[]>(["BTCUSDT", "ETHUSDT", "BNBUSDT"]);
   const [evmWallet, setEvmWallet] = useState<WalletConnection | null>(null);
   const [scoinWallet, setScoinWallet] = useState<WalletConnection | null>(null);
+  const [scoinBalances, setScoinBalances] = useState<CoinBalance[] | null>(null);
+  const [scoinBalanceError, setScoinBalanceError] = useState("");
   const [walletError, setWalletError] = useState("");
   const [amount, setAmount] = useState("1");
   const [selectedSymbol, setSelectedSymbol] = useState("BTCUSDT");
@@ -117,6 +125,36 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
       unsubscribe();
     };
   }, [refreshMarkets]);
+
+  useEffect(() => {
+    if (!scoinWallet) {
+      setScoinBalances(null);
+      setScoinBalanceError("");
+      return undefined;
+    }
+
+    let cancelled = false;
+    setScoinBalances(null);
+    setScoinBalanceError("");
+
+    void getAccountBalances(apiUrl, scoinWallet.address)
+      .then((balances) => {
+        if (!cancelled) setScoinBalances(balances);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setScoinBalanceError(
+            error instanceof Error
+              ? error.message
+              : "Could not read this S Coin account balance.",
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiUrl, scoinWallet]);
 
   useEffect(() => {
     if (!evmWallet) return undefined;
@@ -686,6 +724,28 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
                 <Text style={styles.connectedMeta}>
                   {scoinWallet.name} · {scoinWallet.chainId}
                 </Text>
+                {scoinBalances ? (
+                  <View style={styles.scoinBalanceList}>
+                    {scoinBalances.length > 0 ? scoinBalances.map((coin) => (
+                      <View key={coin.denom} style={styles.scoinBalanceRow}>
+                        <Text style={styles.scoinBalanceValue}>
+                          {coin.denom === "uscoin" ? formatScoin(coin.amount) : coin.amount}
+                        </Text>
+                        <Text style={styles.scoinBalanceDenom}>
+                          {coin.denom === "uscoin" ? "S" : coin.denom}
+                        </Text>
+                      </View>
+                    )) : (
+                      <Text style={styles.walletBalanceMuted}>No bank balances reported for this account.</Text>
+                    )}
+                  </View>
+                ) : scoinBalanceError ? (
+                  <Text style={styles.walletBalanceMuted}>
+                    Balance unavailable: {scoinBalanceError}
+                  </Text>
+                ) : (
+                  <Text style={styles.walletBalanceMuted}>Reading S Coin balance from the connected node…</Text>
+                )}
                 <Pressable onPress={() => setScoinWallet(null)}>
                   <Text style={styles.disconnectText}>Clear local display</Text>
                 </Pressable>
@@ -1261,6 +1321,10 @@ const styles = StyleSheet.create({
   connectedMeta: { color: palette.muted, fontSize: 9, marginTop: 5 },
   walletBalance: { color: palette.positive, fontSize: 10, fontWeight: "800", marginTop: 8 },
   walletBalanceMuted: { color: palette.muted, fontSize: 9, marginTop: 8 },
+  scoinBalanceList: { gap: 6, marginTop: 8 },
+  scoinBalanceRow: { flexDirection: "row", alignItems: "baseline", gap: 7 },
+  scoinBalanceValue: { color: palette.positive, fontSize: 12, fontWeight: "800" },
+  scoinBalanceDenom: { color: palette.muted, fontSize: 9, fontWeight: "700" },
   disconnectText: { color: palette.accent, fontSize: 9, marginTop: 8 },
   inlineError: {
     color: palette.negative,
