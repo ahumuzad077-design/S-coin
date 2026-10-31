@@ -136,6 +136,25 @@ test("rejects invalid transaction targets, calldata and missing execution flag",
   }
 });
 
+test("rejects conflicting 0x allowance-target fields", async () => {
+  await assert.rejects(
+    requestEvmSwapQuote(
+      "https://quote.example",
+      request,
+      fetchWithPayload({
+        provider: "0x",
+        executionEnabled: false,
+        notice: "Preview",
+        quote: {
+          ...quote(),
+          allowanceTarget: "0x6666666666666666666666666666666666666666",
+        },
+      }),
+    ),
+    /conflicting token allowance targets/,
+  );
+});
+
 test("rejects an allowance target that is not an address", async () => {
   await assert.rejects(
     requestEvmSwapQuote(
