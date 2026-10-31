@@ -28,11 +28,11 @@ import {
   shortenWalletAddress,
 } from "./walletAdapters";
 import {
-  EvmSwapQuoteResponse,
   formatTokenUnits,
   parseTokenUnits,
   requestEvmSwapQuote,
 } from "./swapApi";
+import type { EvmSwapQuoteResponse } from "./swapApi";
 
 interface ExchangeHubProps {
   chainId: string;
@@ -82,7 +82,8 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
     void refreshMarkets();
     return subscribeBinanceTickers(
       (nextTickers) => setTickers((current) => {
-        const merged = new Map(current.map((ticker) => [ticker.symbol, ticker]));
+        const merged = new Map<string, BinanceTicker>();
+        for (const ticker of current) merged.set(ticker.symbol, ticker);
         for (const ticker of nextTickers) merged.set(ticker.symbol, ticker);
         return Array.from(merged.values()).sort(
           (left, right) => Number(right.quoteVolume) - Number(left.quoteVolume),
