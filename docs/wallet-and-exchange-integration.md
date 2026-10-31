@@ -277,3 +277,49 @@ Before customer funds or fiat rails are enabled:
 6. Add Binance authenticated Spot Testnet account/order integration only if
    there is a confirmed business need; production trading requires separate
    legal, operational and security approval.
+
+
+## Binance Spot Testnet trading desk
+
+The Markets screen now includes an isolated Binance Spot Testnet panel. It
+supports testnet account balances, signed MARKET/LIMIT order validation and
+placement, open-order queries, cancellation and recent order history. All
+requests are hard-pinned in the client module to
+https://testnet.binance.vision. There is no production Binance API host,
+withdrawal, margin or futures route in this integration.
+
+Create an API key on the official Binance Spot Test Network website. Enter the
+key and secret only in the local app. Android/iOS builds use Expo SecureStore;
+web keeps them in memory for the current browser tab/session only. The app does
+not send Binance credentials to the S Coin server. Use a dedicated testnet key
+with read and Spot-trading permissions only. Revoke it at Binance Testnet if
+you lose control of the device or browser. Browser secrets remain exposed to
+malicious extensions or compromised page scripts, so use a trusted browser.
+
+Official Testnet REST API root: https://testnet.binance.vision/api
+Testnet API-key portal: https://testnet.binance.vision
+
+## EVM swap execution gates
+
+The client and quote service now contain a wallet-confirmed EVM swap path. It
+checks quote freshness, chain, taker, sell/buy tokens, provider liquidity,
+sell-token balance, token contracts, exact allowance, transaction target and
+gas simulation. When token allowance is insufficient, the app requests a
+separate approval for the exact sell amount. The user must approve that action
+and the later swap separately in their external wallet.
+
+Execution is disabled by default on both client and server. It should only be
+considered after verifying (a) a chain supported by the 0x Swap API, (b) exact
+sell and buy token contracts, (c) the 0x transaction/Settler entrypoint target,
+and (d) the AllowanceHolder or Permit2 spender returned by the 0x quote. Never
+approve Settler. 0x does not provide a Sepolia testnet swap venue; use Binance
+Spot Testnet for simulated trading tests instead.
+
+Server settings: SWAP_EVM_EXECUTION_ENABLED,
+SWAP_ALLOWED_EVM_TRANSACTION_TARGETS_JSON, and
+SWAP_ALLOWED_EVM_ALLOWANCE_TARGETS_JSON. Client settings:
+EXPO_PUBLIC_EVM_SWAP_ENABLED, EXPO_PUBLIC_EVM_SWAP_CHAIN_IDS, and
+EXPO_PUBLIC_EVM_SWAP_TARGETS_JSON. Keep these unset/off until independent
+security review and explicit operational approval. The quote service must also
+sit behind real session authentication and a production-grade distributed
+limiter/WAF; CORS and an in-memory IP limiter are not authentication.
