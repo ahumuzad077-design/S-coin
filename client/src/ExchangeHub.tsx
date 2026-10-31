@@ -126,6 +126,11 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
     });
   }, [searchTerm, tickers, watchlist, watchlistOnly]);
 
+  const visibleTickers = useMemo(
+    () => (searchTerm.trim() ? filteredTickers : filteredTickers.slice(0, 100)),
+    [filteredTickers, searchTerm],
+  );
+
   const toggleWatchlist = (symbol: string) => {
     setWatchlist((current) =>
       current.includes(symbol)
@@ -349,11 +354,15 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
           </View>
 
           <View style={styles.marketCountRow}>
-            <Text style={styles.tableLabel}>{filteredTickers.length} MARKETS</Text>
+            <Text style={styles.tableLabel}>
+              {searchTerm.trim() || watchlistOnly
+                ? visibleTickers.length + " MATCHES"
+                : "TOP " + visibleTickers.length + " OF " + filteredTickers.length + " USDT PAIRS"}
+            </Text>
             <Text style={styles.tableLabel}>{watchlist.length} WATCHLISTED</Text>
           </View>
 
-          {filteredTickers.map((ticker) => {
+          {visibleTickers.map((ticker) => {
             const selected = ticker.symbol === selectedSymbol;
             const favorite = watchlist.includes(ticker.symbol);
             const positive = Number(ticker.priceChangePercent) >= 0;
