@@ -32,7 +32,15 @@ import {
   getErc20TokenDecimals,
   shortenWalletAddress,
   subscribeEvmWalletChanges,
+  getActiveEvmProvider,
+  refreshConnectedEvmBalance,
 } from "./walletAdapters";
+import {
+  createNativeTransferPreview,
+  submitNativeTransfer,
+  waitForEvmTransactionReceipt,
+  type NativeTransferPreview,
+} from "./evmTransactions";
 import {
   formatTokenUnits,
   parseTokenUnits,
@@ -62,6 +70,13 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
   const [watchlistOnly, setWatchlistOnly] = useState(false);
   const [watchlist, setWatchlist] = useState<string[]>(["BTCUSDT", "ETHUSDT", "BNBUSDT"]);
   const [evmWallet, setEvmWallet] = useState<WalletConnection | null>(null);
+  const [nativeRecipient, setNativeRecipient] = useState("");
+  const [nativeAmount, setNativeAmount] = useState("0.01");
+  const [nativePreview, setNativePreview] = useState<NativeTransferPreview | null>(null);
+  const [nativeTransferLoading, setNativeTransferLoading] = useState(false);
+  const [nativeTransferError, setNativeTransferError] = useState("");
+  const [nativeTransferHash, setNativeTransferHash] = useState("");
+  const [nativeTransferStatus, setNativeTransferStatus] = useState("");
   const [scoinWallet, setScoinWallet] = useState<WalletConnection | null>(null);
   const [scoinBalances, setScoinBalances] = useState<CoinBalance[] | null>(null);
   const [scoinBalanceError, setScoinBalanceError] = useState("");
@@ -267,6 +282,73 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
           ? error.message
           : "Could not connect the EVM wallet.",
       );
+    }
+  };
+
+  const previewNativeTransfer = async () => {
+    setNativeTransferLoading(true);
+    setNativeTransferError("");
+    setNativeTransferHash("");
+    setNativeTransferStatus("");
+    setNativePreview(null);
+    try {
+      if (!evmWallet) throw new Error("Connect MetaMask before preparing a transfer.");
+      const preview = await createNativeTransferPreview(getActiveEvmProvider(), {
+        chainId: evmWallet.chainId,
+        from: evmWallet.address,
+        to: nativeRecipient.trim(),
+        amount: nativeAmount.trim(),
+      });
+      setNativePreview(preview);
+    } catch (error) {
+      setNativeTransferError(
+        error instanceof Error ? error.message : "Could not prepare this transfer.",
+      );
+    } finally {
+      setNativeTransferLoading(false);
+    }
+  };
+
+  const confirmNativeTransfer = async () => {
+    setNativeTransferLoading(true);
+    setNativeTransferError("");
+    try {
+      if (!evmWallet || !nativePreview) {
+        throw new Error("Prepare and review the transfer before continuing.");
+      }
+      const provider = getActiveEvmProvider();
+      const hash = await submitNativeTransfer(provider, nativePreview);
+      setNativeTransferHash(hash);
+      setNativeTransferStatus("Submitted to the network. Waiting for confirmation…");
+      setNativePreview(null);
+
+      void waitForEvmTransactionReceipt(provider, evmWallet.chainId, hash)
+        .then(async (receipt) => {
+          if (receipt.status === "success") {
+            setNativeTransferStatus("Confirmed in block " + BigInt(receipt.blockNumber).toString() + ".");
+            try {
+              const balance = await refreshConnectedEvmBalance();
+              setEvmWallet((current) => current ? { ...current, ...balance } : current);
+            } catch {
+              // The transaction is confirmed even if the balance refresh fails.
+            }
+          } else {
+            setNativeTransferStatus("The network marked this transaction as reverted.");
+          }
+        })
+        .catch((error) => {
+          setNativeTransferStatus(
+            error instanceof Error
+              ? "Confirmation not yet verified: " + error.message
+              : "Confirmation not yet verified. Keep the transaction hash.",
+          );
+        });
+    } catch (error) {
+      setNativeTransferError(
+        error instanceof Error ? error.message : "The wallet could not submit this transfer.",
+      );
+    } finally {
+      setNativeTransferLoading(false);
     }
   };
 
@@ -790,6 +872,116 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
               S Coin never asks for a recovery phrase here. Connecting displays
               a public address only; this release does not sign or send funds.
             </Text>
+          </View>
+
+          <View style={styles.panel}>
+            <Text style={styles.eyebrow}>ON-CHAIN TRANSFER · EVM NETWORKS</Text>
+            <Text style={styles.panelTitle}>Send native crypto</Text>
+            <Text style={styles.muted}>
+              Send the connected network's native asset through MetaMask. S Coin
+              only prepares the transaction; your wallet must show and approve it.
+            </Text>
+            {evmWallet ? (
+              <>
+                <Text style={styles.fieldLabel}>RECIPIENT ADDRESS</Text>
+                <TextInput
+                  accessibilityLabel="Native asset recipient address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onChangeText={(value) => {
+                    setNativeRecipient(value);
+                    setNativePreview(null);
+                    setNativeTransferHash("");
+                  }}
+                  placeholder="0x…"
+                  placeholderTextColor={palette.muted}
+                  style={styles.quoteInput}
+                  value={nativeRecipient}
+                />
+                <Text style={styles.fieldLabel}>
+                  AMOUNT · {evmWallet.nativeSymbol ?? "NATIVE"}
+                </Text>
+                <TextInput
+                  accessibilityLabel="Native asset transfer amount"
+                  keyboardType="decimal-pad"
+                  onChangeText={(value) => {
+                    setNativeAmount(value);
+                    setNativePreview(null);
+                    setNativeTransferHash("");
+                  }}
+                  placeholder="0.01"
+                  placeholderTextColor={palette.muted}
+                  style={styles.quoteInput}
+                  value={nativeAmount}
+                />
+                {nativePreview ? (
+                  <View style={styles.quoteResult}>
+                    <Text style={styles.connectedLabel}>REVIEW BEFORE WALLET APPROVAL</Text>
+                    <Text style={styles.quoteResultMeta}>From: {shortenWalletAddress(nativePreview.from)}</Text>
+                    <Text style={styles.quoteResultMeta}>To: {shortenWalletAddress(nativePreview.to)}</Text>
+                    <Text style={styles.quoteResultValue}>
+                      {nativePreview.amount} {evmWallet.nativeSymbol ?? "NATIVE"}
+                    </Text>
+                    <Text style={styles.quoteResultMeta}>
+                      Estimated network fee: {nativePreview.estimatedGasFee} {evmWallet.nativeSymbol ?? "NATIVE"}
+                    </Text>
+                    <Text style={styles.quoteResultMeta}>
+                      Estimated total: {nativePreview.totalRequired} {evmWallet.nativeSymbol ?? "NATIVE"}
+                    </Text>
+                    <Text style={styles.sourceNote}>
+                      Fee estimates can change before mining. Review the final amount,
+                      recipient and fee in MetaMask before approving.
+                    </Text>
+                  </View>
+                ) : null}
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={nativeTransferLoading || !nativeRecipient.trim()}
+                  onPress={() => void previewNativeTransfer()}
+                  style={[
+                    styles.quoteButton,
+                    (nativeTransferLoading || !nativeRecipient.trim()) && styles.disabled,
+                  ]}
+                >
+                  {nativeTransferLoading && !nativePreview ? (
+                    <ActivityIndicator color="#0B130B" size="small" />
+                  ) : (
+                    <Text style={styles.quoteButtonText}>Prepare transfer & estimate fee</Text>
+                  )}
+                </Pressable>
+                {nativePreview ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={nativeTransferLoading}
+                    onPress={() => void confirmNativeTransfer()}
+                    style={[styles.quoteButton, nativeTransferLoading && styles.disabled]}
+                  >
+                    {nativeTransferLoading ? (
+                      <ActivityIndicator color="#0B130B" size="small" />
+                    ) : (
+                      <Text style={styles.quoteButtonText}>Continue to MetaMask approval</Text>
+                    )}
+                  </Pressable>
+                ) : null}
+                {nativeTransferError ? (
+                  <Text accessibilityRole="alert" style={styles.inlineError}>{nativeTransferError}</Text>
+                ) : null}
+                {nativeTransferHash ? (
+                  <View style={styles.quoteResult}>
+                    <Text style={styles.connectedLabel}>TRANSACTION SUBMITTED</Text>
+                    <Text selectable style={styles.quoteResultMeta}>{nativeTransferHash}</Text>
+                    <Text style={styles.muted}>{nativeTransferStatus}</Text>
+                  </View>
+                ) : null}
+                <Text style={styles.sourceNote}>
+                  S Coin does not hold the account's private keys. Never approve a
+                  transaction you did not initiate or whose recipient and network differ
+                  from this review.
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.sourceNote}>Connect an EVM wallet above to prepare a native-asset transfer.</Text>
+            )}
           </View>
 
           <View style={styles.panel}>
