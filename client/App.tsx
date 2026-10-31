@@ -29,8 +29,9 @@ import {
   getValidators,
   shorten,
 } from "./src/chain";
+import { MarketScreen } from "./src/MarketScreen";
 
-type Screen = "overview" | "wallet" | "explorer" | "validators" | "settings";
+type Screen = "overview" | "markets" | "wallet" | "explorer" | "validators" | "settings";
 
 const initialApiUrl =
   process.env.EXPO_PUBLIC_SCOIN_API_URL ??
@@ -41,6 +42,7 @@ const initialApiUrl =
       : "http://127.0.0.1:1317");
 const navigation: { id: Screen; label: string; glyph: string }[] = [
   { id: "overview", label: "Overview", glyph: "◈" },
+  { id: "markets", label: "Markets", glyph: "↗" },
   { id: "wallet", label: "Wallet", glyph: "▣" },
   { id: "explorer", label: "Explorer", glyph: "⌕" },
   { id: "validators", label: "Validators", glyph: "⌘" },
@@ -171,7 +173,9 @@ export default function App() {
           ? "Network explorer"
           : screen === "validators"
             ? "Validator set"
-            : "Connection settings";
+            : screen === "markets"
+              ? "Meridian Markets · Simulation"
+              : "Connection settings";
 
   return (
     <View style={styles.app}>
@@ -223,7 +227,7 @@ export default function App() {
             </View>
             <View style={styles.topbarActions}>
               <View style={styles.readOnlyPill}>
-                <Text style={styles.readOnlyText}>READ ONLY</Text>
+                <Text style={styles.readOnlyText}>{screen === "markets" ? "SIMULATION ONLY" : "READ ONLY"}</Text>
               </View>
               <Pressable
                 accessibilityRole="button"
@@ -270,6 +274,7 @@ export default function App() {
               </Text>
             ) : null}
 
+            {screen === "markets" && <MarketScreen compact={compact} />}
             {screen === "overview" && (
               <Overview
                 compact={compact}
