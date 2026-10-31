@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS exchange_organisations (
     website TEXT NOT NULL DEFAULT '',
     verification_status TEXT NOT NULL DEFAULT 'PENDING_VERIFICATION'
         CHECK (verification_status IN ('PENDING_VERIFICATION','VERIFIED','REJECTED')),
+    registration_evidence_reference TEXT,
+    registration_verified_by_subject TEXT,
+    registration_verified_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (registration_country, registration_number)
