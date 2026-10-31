@@ -1739,10 +1739,11 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
               </View>
             ) : null}
             <Text style={styles.sourceNote}>
-              Native S Coin needs a registered DEX / IBC route and liquidity.
-              EVM execution is not enabled in this release; wallet approvals,
-              transaction simulation, chain checks and explicit signing must
-              be completed before funds can move.
+              EVM swap execution is off by default and requires matching
+              server-side and app-build chain, token, Settler and AllowanceHolder
+              allowlists. Quotes can be previewed without execution. Native
+              S Coin still needs a verified DEX / IBC route, chain registration
+              and real liquidity before it can be swapped.
             </Text>
           </View>
 
