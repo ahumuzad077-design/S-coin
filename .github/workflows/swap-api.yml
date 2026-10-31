@@ -1,0 +1,28 @@
+name: Swap API checks
+
+on:
+  pull_request:
+    paths:
+      - "server/swap-api/**"
+      - ".github/workflows/swap-api.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  swap-api-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Validate JavaScript syntax
+        run: node --check server/swap-api/server.mjs
+
+      - name: Run API input and configuration tests
+        run: node --test server/swap-api/server.test.mjs
