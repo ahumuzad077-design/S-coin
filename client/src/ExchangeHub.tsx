@@ -701,6 +701,15 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
                 <Text style={styles.connectedMeta}>
                   {evmWallet.name} · {evmWallet.chainId}
                 </Text>
+                {typeof evmWallet.nativeBalance === "string" ? (
+                  <Text style={styles.walletBalance}>
+                    {evmWallet.nativeBalance} {evmWallet.nativeSymbol ?? "NATIVE"} available
+                  </Text>
+                ) : (
+                  <Text style={styles.walletBalanceMuted}>
+                    Native balance unavailable from this RPC
+                  </Text>
+                )}
                 <Pressable onPress={() => void clearEvmWallet()}>
                   <Text style={styles.disconnectText}>
                     {evmWallet.name === "MetaMask Connect"
@@ -1250,6 +1259,8 @@ const styles = StyleSheet.create({
     marginTop: 7,
   },
   connectedMeta: { color: palette.muted, fontSize: 9, marginTop: 5 },
+  walletBalance: { color: palette.positive, fontSize: 10, fontWeight: "800", marginTop: 8 },
+  walletBalanceMuted: { color: palette.muted, fontSize: 9, marginTop: 8 },
   disconnectText: { color: palette.accent, fontSize: 9, marginTop: 8 },
   inlineError: {
     color: palette.negative,
