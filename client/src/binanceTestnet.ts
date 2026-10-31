@@ -115,9 +115,9 @@ async function requestBinance<T>(
   let body: string | undefined;
 
   if (options.signed) {
-    const credentials = options.credentials ?? await loadBinanceTestnetCredentials();
+    const credentials = options.credentials;
     if (!credentials) {
-      throw new Error("Connect a Binance Spot Testnet API key before using testnet account features.");
+      throw new Error("Pass locally stored Binance Spot Testnet credentials to the request.");
     }
     headers["X-MBX-APIKEY"] = credentials.apiKey;
     query = new URLSearchParams(
