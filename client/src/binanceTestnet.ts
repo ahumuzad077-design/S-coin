@@ -72,7 +72,7 @@ function assertSymbol(symbol: string): string {
 
 function assertPositiveDecimal(value: string, label: string): string {
   const normalized = value.trim();
-  if (!/^(?:0|[1-9]\\d{0,30})(?:\\.\\d{1,18})?$/.test(normalized) || Number(normalized) <= 0) {
+  if (!/^(?:0|[1-9]\d{0,30})(?:\.\d{1,18})?$/.test(normalized) || Number(normalized) <= 0) {
     throw new Error(label + " must be a positive decimal value.");
   }
   return normalized;
@@ -129,7 +129,8 @@ async function requestBinance<T>(
     }
   }
 
-  const url = TESTNET_BASE_URL + path + (query.size ? "?" + query.toString() : "");
+  const queryString = query.toString();
+  const url = TESTNET_BASE_URL + path + (queryString ? "?" + queryString : "");
   if (method === "POST" || method === "DELETE") {
     headers["Content-Type"] = "application/x-www-form-urlencoded";
     body = "";
@@ -197,8 +198,8 @@ export async function getBinanceTestnetAccount(
     balances: result.balances
       .filter((balance) =>
         typeof balance.asset === "string" &&
-        /^\\d+(?:\\.\\d+)?$/.test(balance.free) &&
-        /^\\d+(?:\\.\\d+)?$/.test(balance.locked),
+        /^\d+(?:\.\d+)?$/.test(balance.free) &&
+        /^\d+(?:\.\d+)?$/.test(balance.locked),
       )
       .sort((left, right) => Number(right.free) + Number(right.locked) - Number(left.free) - Number(left.locked)),
   };
@@ -317,6 +318,26 @@ export async function cancelBinanceTestnetOrder(
     { symbol: assertSymbol(symbol), orderId },
     { signed: true, credentials: resolved, fetchImpl },
   );
+}
+
+
+export async function getBinanceTestnetOrderHistory(
+  symbol: string,
+  credentials?: BinanceTestnetCredentials,
+  fetchImpl?: BinanceFetch,
+): Promise<BinanceTestnetOrder[]> {
+  const resolved = await getCredentials(credentials);
+  if (!resolved) throw new Error("Connect a Binance Spot Testnet API key first.");
+  const result = await requestBinance<BinanceTestnetOrder[]>(
+    "/api/v3/allOrders",
+    "GET",
+    { symbol: assertSymbol(symbol), limit: 20 },
+    { signed: true, credentials: resolved, fetchImpl },
+  );
+  if (!Array.isArray(result)) {
+    throw new Error("Binance Testnet returned an invalid order history.");
+  }
+  return result;
 }
 
 export function getBinanceTestnetBaseUrl(): string {
