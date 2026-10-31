@@ -45,6 +45,7 @@ func (a *OIDCAuthenticator) Authenticate(ctx context.Context, r *http.Request) (
 	var claims struct {
 		Subject        string   `json:"sub"`
 		Email          string   `json:"email"`
+		EmailVerified  bool     `json:"email_verified"`
 		OrganizationID string   `json:"organization_id"`
 		Roles          []string `json:"roles"`
 		Groups         []string `json:"groups"`
@@ -62,6 +63,7 @@ func (a *OIDCAuthenticator) Authenticate(ctx context.Context, r *http.Request) (
 	return Principal{
 		Subject: strings.TrimSpace(claims.Subject),
 		Email: strings.TrimSpace(claims.Email),
+		EmailVerified: claims.EmailVerified,
 		OrganizationID: strings.TrimSpace(claims.OrganizationID),
 		Roles: roles,
 	}, nil
