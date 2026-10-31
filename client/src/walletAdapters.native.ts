@@ -296,6 +296,10 @@ export async function connectScoinWallet(
   );
 }
 
+export function getScoinOfflineSigner(_chainId: string): never {
+  throw new Error("Native Keplr / Cosmos mobile wallet pairing is not configured.");
+}
+
 export function shortenWalletAddress(address: string): string {
   if (address.length <= 18) return address;
   return address.slice(0, 9) + "…" + address.slice(-7);
