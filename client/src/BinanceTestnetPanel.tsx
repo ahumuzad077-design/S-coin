@@ -188,6 +188,7 @@ export function BinanceTestnetPanel({ selectedMarket = "BTCUSDT" }: BinanceTestn
     try {
       const order = currentOrder();
       if (!credentials) throw new Error("Connect a Binance Spot Testnet API key first.");
+      if (!account?.canTrade) throw new Error("This Spot Testnet API key does not have trading permission.");
       const result = await validateBinanceTestnetOrder(order, credentials);
       if (!result.accepted) throw new Error(result.message);
       setValidatedOrder(order);
@@ -209,6 +210,7 @@ export function BinanceTestnetPanel({ selectedMarket = "BTCUSDT" }: BinanceTestn
     setNotice("");
     try {
       if (!credentials) throw new Error("Connect a Binance Spot Testnet API key first.");
+      if (!account?.canTrade) throw new Error("This Spot Testnet API key does not have trading permission.");
       if (!validatedOrder) throw new Error("Test the order first and review its parameters.");
       const order = await placeBinanceTestnetOrder(validatedOrder, credentials);
       setLastOrder(order);
@@ -407,9 +409,9 @@ export function BinanceTestnetPanel({ selectedMarket = "BTCUSDT" }: BinanceTestn
           ) : null}
           <Pressable
             accessibilityRole="button"
-            disabled={loading || !symbol.trim() || !quantity.trim()}
+            disabled={loading || !account?.canTrade || !symbol.trim() || !quantity.trim()}
             onPress={() => void testOrder()}
-            style={[styles.secondaryButton, (loading || !symbol.trim() || !quantity.trim()) && styles.disabled]}
+            style={[styles.secondaryButton, (loading || !account?.canTrade || !symbol.trim() || !quantity.trim()) && styles.disabled]}
           >
             {loading && !validatedOrder ? <ActivityIndicator color={colors.ink} /> : <Text style={styles.secondaryButtonText}>Validate order on Testnet</Text>}
           </Pressable>
