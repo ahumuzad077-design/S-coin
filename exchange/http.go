@@ -205,6 +205,8 @@ func writeStoreError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, "conflict", "A company with the same official registration has already been submitted.")
 	case errors.Is(err, ErrInvalidTransition):
 		writeError(w, http.StatusConflict, "invalid_transition", "That review decision is not permitted from the current application status.")
+	case errors.Is(err, ErrPrerequisiteNotMet):
+		writeError(w, http.StatusConflict, "company_verification_required", "Company registration must be verified by exchange compliance before due diligence can begin.")
 	case errors.Is(err, ErrForbidden):
 		writeError(w, http.StatusForbidden, "forbidden", "You are not authorised for this operation.")
 	default:
