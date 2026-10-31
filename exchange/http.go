@@ -51,6 +51,10 @@ func NewHTTPHandler(store Store, auth Authenticator, legalName string) http.Hand
 			var input IssuerApplicationInput
 			if err := decodeJSON(w, r, &input, 64*1024); err != nil { writeError(w, http.StatusBadRequest, "invalid_json", "Provide one valid issuer application JSON object."); return }
 			if !p.EmailVerified || !strings.EqualFold(strings.TrimSpace(input.ApplicantEmail), strings.TrimSpace(p.Email)) { writeError(w, http.StatusUnprocessableEntity, "verified_email_required", "Use the email address verified by your identity provider."); return }
+			if strings.TrimSpace(p.OrganizationID) == "" {
+				writeError(w, http.StatusForbidden, "verified_organisation_required", "Your identity provider must associate your account with a verified organisation.")
+				return
+			}
 			if err := ValidateIssuerApplication(input); err != nil { writeError(w, http.StatusUnprocessableEntity, "invalid_application", "Check the required company registration, contact, security and capital-raising fields."); return }
 			requestID, err := newRequestID()
 			if err != nil { writeError(w, http.StatusInternalServerError, "request_id_failed", "The request could not be safely recorded."); return }
@@ -86,7 +90,11 @@ func NewHTTPHandler(store Store, auth Authenticator, legalName string) http.Hand
 		isReviewer := p.HasRole("EXCHANGE_REVIEW_OFFICER") || p.HasRole("EXCHANGE_COMPLIANCE") || p.HasRole("EXCHANGE_ADMIN")
 		application, err := store.GetIssuerApplication(r.Context(), id)
 		if err != nil { writeStoreError(w, err); return }
-		if !isReviewer && application.SubmittedBy != p.Subject {
+		sameApplicant := application.SubmittedBy == p.Subject
+		sameOrganisation := strings.TrimSpace(p.OrganizationID) != "" &&
+			application.ApplicantOrganisationID != "" &&
+			application.ApplicantOrganisationID == p.OrganizationID
+		if !isReviewer && !sameApplicant && !sameOrganisation {
 			writeError(w, http.StatusNotFound, "not_found", "Issuer application was not found.")
 			return
 		}
