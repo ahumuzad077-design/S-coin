@@ -138,15 +138,7 @@ export function BinanceTestnetPanel({ selectedMarket = "BTCUSDT" }: BinanceTestn
       setApiKey("");
       setApiSecret("");
       setConnected(true);
-      const nextAccount = await getBinanceTestnetAccount(nextCredentials);
-      setAccount(nextAccount);
-      const [orders, history] = await Promise.all([
-        getBinanceTestnetOpenOrders(symbol.trim() || undefined, nextCredentials),
-        symbol.trim() ? getBinanceTestnetOrderHistory(symbol.trim(), nextCredentials) : Promise.resolve([]),
-      ]);
-      setOpenOrders(orders);
-      setOrderHistory(history.slice(-10).reverse());
-      setNotice("Binance Spot Testnet connected. These are simulated testnet funds.");
+      setNotice("Credentials saved locally. Verifying your Binance Spot Testnet account…");
     } catch (requestError) {
       setError(
         requestError instanceof Error
