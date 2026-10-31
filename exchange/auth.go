@@ -28,7 +28,7 @@ func NewOIDCAuthenticator(ctx context.Context, issuerURL, clientID string) (*OID
 		return nil, errors.New("could not discover configured OIDC provider")
 	}
 	return &OIDCAuthenticator{
-		verifier: provider.VerifierContext(ctx, &oidc.Config{ClientID: clientID}),
+		verifier: provider.Verifier(&oidc.Config{ClientID: clientID}),
 	}, nil
 }
 
