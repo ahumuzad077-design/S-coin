@@ -1,7 +1,7 @@
 import { hmac } from "@noble/hashes/hmac.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
-import { loadBinanceTestnetCredentials, type BinanceTestnetCredentials } from "./binanceCredentialStore";
+import type { BinanceTestnetCredentials } from "./binanceCredentialStore";
 
 const TESTNET_BASE_URL = "https://testnet.binance.vision";
 const RECV_WINDOW = 5_000;
@@ -174,8 +174,11 @@ async function requestBinance<T>(
   }
 }
 
-function getCredentials(explicit?: BinanceTestnetCredentials) {
-  return explicit ?? loadBinanceTestnetCredentials();
+function getCredentials(explicit?: BinanceTestnetCredentials): BinanceTestnetCredentials {
+  if (!explicit) {
+    throw new Error("Connect a Binance Spot Testnet API key before using testnet account features.");
+  }
+  return explicit;
 }
 
 export async function getBinanceTestnetAccount(
