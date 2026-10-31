@@ -17,6 +17,7 @@ type testStore struct {
 	application IssuerApplication
 	created bool
 	decisionCalls int
+	verificationCalls int
 }
 
 func (s *testStore) CreateIssuerApplication(_ context.Context, p Principal, in IssuerApplicationInput, _ string) (IssuerApplication, error) {
@@ -42,6 +43,11 @@ func (s *testStore) ListIssuerApplications(context.Context, string, int) ([]Issu
 }
 func (s *testStore) ListApplicationEvents(context.Context, string) ([]ApplicationEvent, error) {
 	return []ApplicationEvent{}, nil
+}
+func (s *testStore) VerifyOrganisationRegistration(_ context.Context, _ Principal, _ string, input CompanyVerificationInput, _ string) (IssuerApplication, error) {
+	s.verificationCalls++
+	s.application.OrganisationVerificationStatus = input.Decision
+	return s.application, nil
 }
 func (s *testStore) DecideIssuerApplication(_ context.Context, p Principal, _ string, d ReviewDecisionInput, _ string) (IssuerApplication, error) {
 	s.decisionCalls++
@@ -125,5 +131,53 @@ func TestExchangeStatusNeverEnablesTradingFromApprovalRecordAlone(t *testing.T) 
 	}
 	if status.TradingEnabled {
 		t.Fatal("issuer operations service must not enable securities trading")
+	}
+}
+
+
+func TestCompanyVerificationRequiresComplianceRoleAndRegistryEvidence(t *testing.T) {
+	store := &testStore{application: IssuerApplication{
+		ID: "2db3c8f4-6b7e-4a1d-8b09-0e6fdbcc5f10",
+		SubmittedBy: "issuer-1",
+		OrganisationVerificationStatus: "PENDING_VERIFICATION",
+	}}
+	principal := Principal{Subject:"compliance-1", EmailVerified:true, Roles:map[string]struct{}{"EXCHANGE_COMPLIANCE":{}}}
+	handler := NewHTTPHandler(store, testAuthenticator{principal}, "MERIDIAN MARKET OPERATOR")
+	body := `{"decision":"VERIFIED","registryEvidenceUrl":"https://ursb.go.ug/company-search/verified-record","reason":"The company registration details were checked against the official registry record."}`
+	request := httptest.NewRequest(http.MethodPost, "/v1/issuer-applications/2db3c8f4-6b7e-4a1d-8b09-0e6fdbcc5f10/company-verification", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || store.verificationCalls != 1 {
+		t.Fatalf("compliance verification failed: status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestCompanyVerificationRejectsNonHttpsEvidence(t *testing.T) {
+	input := CompanyVerificationInput{
+		Decision: "VERIFIED",
+		RegistryEvidenceURL: "http://registry.example/record",
+		Reason: "Checked official company record and registration information.",
+	}
+	if err := ValidateCompanyVerification(input); err == nil {
+		t.Fatal("non-HTTPS registry evidence must be rejected")
+	}
+}
+
+func TestGeneralReviewerCannotVerifyCompanyRegistration(t *testing.T) {
+	store := &testStore{application: IssuerApplication{
+		ID: "2db3c8f4-6b7e-4a1d-8b09-0e6fdbcc5f10",
+		SubmittedBy: "issuer-1",
+		OrganisationVerificationStatus: "PENDING_VERIFICATION",
+	}}
+	principal := Principal{Subject:"reviewer-1", Roles:map[string]struct{}{"EXCHANGE_REVIEW_OFFICER":{}}}
+	handler := NewHTTPHandler(store, testAuthenticator{principal}, "MERIDIAN MARKET OPERATOR")
+	body := `{"decision":"VERIFIED","registryEvidenceUrl":"https://registry.example/record","reason":"The company registration was checked against an official source."}`
+	request := httptest.NewRequest(http.MethodPost, "/v1/issuer-applications/2db3c8f4-6b7e-4a1d-8b09-0e6fdbcc5f10/company-verification", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden || store.verificationCalls != 0 {
+		t.Fatalf("general reviewer must not perform compliance verification: status=%d", response.Code)
 	}
 }
