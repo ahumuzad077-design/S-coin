@@ -419,9 +419,9 @@ export function createSwapApiServer(env = process.env, fetchImpl = fetch) {
             !pickedQuote.allowanceTarget ||
             pickedQuote.issues.allowance.spender.toLowerCase() === pickedQuote.allowanceTarget.toLowerCase()) &&
           typeof pickedQuote.buyAmount === "string" &&
-          /^[1-9]\\d{0,77}$/.test(pickedQuote.buyAmount) &&
+          /^[1-9]\d{0,77}$/.test(pickedQuote.buyAmount) &&
           typeof pickedQuote.minBuyAmount === "string" &&
-          /^[1-9]\\d{0,77}$/.test(pickedQuote.minBuyAmount) &&
+          /^[1-9]\d{0,77}$/.test(pickedQuote.minBuyAmount) &&
           BigInt(pickedQuote.minBuyAmount) <= BigInt(pickedQuote.buyAmount)
         );
         json(response, 200, {
