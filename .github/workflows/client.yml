@@ -7,9 +7,43 @@ on:
       - ".github/workflows/client.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
+
+  go-module-tidy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pull-request branch
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Regenerate Go module metadata
+        run: go mod tidy
+
+      - name: Commit module metadata repair for this repository branch
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if git diff --quiet -- go.mod go.sum; then
+            echo "Go module metadata is already synchronized."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add go.mod go.sum
+          git commit -m "chore(go): synchronize module metadata [skip ci]"
+          git push origin "HEAD:${PR_HEAD_REF}"
+
   typecheck-and-web-export:
     runs-on: ubuntu-latest
     defaults:
