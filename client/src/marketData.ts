@@ -1,5 +1,7 @@
 export interface BinanceTicker {
   symbol: string;
+  baseAsset: string;
+  quoteAsset: string;
   lastPrice: string;
   priceChangePercent: string;
   quoteVolume: string;
@@ -7,115 +9,44 @@ export interface BinanceTicker {
   lowPrice: string;
 }
 
-const marketSymbols = [
-  "BTCUSDT",
-  "ETHUSDT",
-  "BNBUSDT",
-  "SOLUSDT",
-  "XRPUSDT",
-  "ADAUSDT",
-  "DOGEUSDT",
-  "TRXUSDT",
-  "LINKUSDT",
-  "AVAXUSDT",
-  "LTCUSDT",
-  "BCHUSDT",
-  "DOTUSDT",
-  "UNIUSDT",
-  "NEARUSDT",
-  "SUIUSDT",
-  "TONUSDT",
-  "ATOMUSDT",
-  "XLMUSDT",
-  "ETCUSDT",
-  "SHIBUSDT",
-  "AAVEUSDT",
-  "FILUSDT",
-  "APTUSDT",
-  "ARBUSDT",
-  "OPUSDT",
-  "INJUSDT",
-  "SEIUSDT",
-  "USDCUSDT",
-];
+export type BinanceStreamStatus = "connecting" | "live" | "reconnecting";
 
-const marketDataBaseUrl = "https://data-api.binance.vision";
-const requestTimeoutMs = 8000;
+interface BinanceExchangeSymbol {
+  symbol?: unknown;
+  baseAsset?: unknown;
+  quoteAsset?: unknown;
+  status?: unknown;
+  isSpotTradingAllowed?: unknown;
+}
 
-/**
- * Reads public Binance Spot market data only.
- * This endpoint does not need an API key and cannot access or trade user funds.
- */
-export async function fetchBinanceTickers(): Promise<BinanceTicker[]> {
-  const symbols = encodeURIComponent(JSON.stringify(marketSymbols));
+interface BinanceStreamTicker {
+  s?: unknown;
+  c?: unknown;
+  P?: unknown;
+  q?: unknown;
+  h?: unknown;
+  l?: unknown;
+}
+
+const REST_BASE_URL = "https://data-api.binance.vision";
+const STREAM_URL =
+  "wss://data-stream.binance.vision/stream?streams=!ticker_1d@arr";
+const requestTimeoutMs = 12_000;
+const knownUsdtMarkets = new Map<string, { baseAsset: string; quoteAsset: string }>();
+
+async function getJson<T>(url: string): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
 
   try {
-    const response = await fetch(
-      marketDataBaseUrl + "/api/v3/ticker/24hr?symbols=" + symbols,
-      {
-        headers: { Accept: "application/json" },
-        signal: controller.signal,
-      },
-    );
-
+    const response = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    });
     if (!response.ok) {
       throw new Error("Binance market data returned HTTP " + response.status);
     }
-
-    const payload: unknown = await response.json();
-    if (!Array.isArray(payload)) {
-      throw new Error("Binance returned an invalid market-data response");
-    }
-
-    const tickers = payload.map((value: unknown): BinanceTicker => {
-      if (typeof value !== "object" || value === null) {
-        throw new Error("Binance returned an invalid ticker");
-      }
-
-      const row = value as Record<string, unknown>;
-      const required = [
-        "symbol",
-        "lastPrice",
-        "priceChangePercent",
-        "quoteVolume",
-        "highPrice",
-        "lowPrice",
-      ];
-
-      for (const field of required) {
-        if (typeof row[field] !== "string") {
-          throw new Error("Binance ticker is missing " + field);
-        }
-      }
-
-      const ticker: BinanceTicker = {
-        symbol: row.symbol as string,
-        lastPrice: row.lastPrice as string,
-        priceChangePercent: row.priceChangePercent as string,
-        quoteVolume: row.quoteVolume as string,
-        highPrice: row.highPrice as string,
-        lowPrice: row.lowPrice as string,
-      };
-
-      if (
-        !/^[A-Z0-9]{3,20}$/.test(ticker.symbol) ||
-        !Number.isFinite(Number(ticker.lastPrice)) ||
-        !Number.isFinite(Number(ticker.priceChangePercent)) ||
-        !Number.isFinite(Number(ticker.quoteVolume)) ||
-        Number(ticker.lastPrice) < 0
-      ) {
-        throw new Error("Binance returned an invalid ticker value");
-      }
-
-      return ticker;
-    });
-
-    return tickers.sort(
-      (left, right) =>
-        Number(right.quoteVolume) - Number(left.quoteVolume),
-    );
+    return (await response.json()) as T;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error("Binance market-data request timed out");
@@ -124,6 +55,139 @@ export async function fetchBinanceTickers(): Promise<BinanceTicker[]> {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function parseStreamTicker(value: unknown): BinanceTicker | null {
+  if (typeof value !== "object" || value === null) return null;
+  const row = value as BinanceStreamTicker;
+
+  if (
+    typeof row.s !== "string" ||
+    !row.s.endsWith("USDT") ||
+    typeof row.c !== "string" ||
+    typeof row.P !== "string" ||
+    typeof row.q !== "string" ||
+    typeof row.h !== "string" ||
+    typeof row.l !== "string"
+  ) {
+    return null;
+  }
+
+  const metadata = knownUsdtMarkets.get(row.s);
+  const ticker: BinanceTicker = {
+    symbol: row.s,
+    baseAsset: metadata?.baseAsset ?? row.s.slice(0, -4),
+    quoteAsset: "USDT",
+    lastPrice: row.c,
+    priceChangePercent: row.P,
+    quoteVolume: row.q,
+    highPrice: row.h,
+    lowPrice: row.l,
+  };
+
+  if (
+    !Number.isFinite(Number(ticker.lastPrice)) ||
+    !Number.isFinite(Number(ticker.priceChangePercent)) ||
+    !Number.isFinite(Number(ticker.quoteVolume)) ||
+    !Number.isFinite(Number(ticker.highPrice)) ||
+    !Number.isFinite(Number(ticker.lowPrice)) ||
+    Number(ticker.lastPrice) < 0 ||
+    Number(ticker.quoteVolume) < 0
+  ) {
+    return null;
+  }
+
+  return ticker;
+}
+
+/**
+ * Discovers all currently trading Binance Spot pairs quoted in USDT, then
+ * fetches the full 24-hour ticker snapshot once. The screen ranks the result
+ * by quote volume and supports searching the whole returned market set.
+ *
+ * Both endpoints are public market-data-only endpoints; no exchange key is
+ * required and no user account/order data is accessed.
+ */
+export async function fetchBinanceTickers(): Promise<BinanceTicker[]> {
+  const [exchangeInfo, tickerPayload] = await Promise.all([
+    getJson<{ symbols?: BinanceExchangeSymbol[] }>(
+      REST_BASE_URL + "/api/v3/exchangeInfo",
+    ),
+    getJson<unknown>(REST_BASE_URL + "/api/v3/ticker/24hr"),
+  ]);
+
+  if (!Array.isArray(exchangeInfo.symbols) || !Array.isArray(tickerPayload)) {
+    throw new Error("Binance returned an invalid exchange or ticker response");
+  }
+
+  knownUsdtMarkets.clear();
+  for (const entry of exchangeInfo.symbols) {
+    if (
+      typeof entry.symbol === "string" &&
+      typeof entry.baseAsset === "string" &&
+      entry.quoteAsset === "USDT" &&
+      entry.status === "TRADING" &&
+      entry.isSpotTradingAllowed !== false
+    ) {
+      knownUsdtMarkets.set(entry.symbol, {
+        baseAsset: entry.baseAsset,
+        quoteAsset: "USDT",
+      });
+    }
+  }
+
+  const tickers: BinanceTicker[] = [];
+  for (const value of tickerPayload) {
+    if (typeof value !== "object" || value === null) continue;
+    const row = value as Record<string, unknown>;
+    if (typeof row.symbol !== "string") continue;
+
+    const market = knownUsdtMarkets.get(row.symbol);
+    if (!market) continue;
+
+    const fields = [
+      "lastPrice",
+      "priceChangePercent",
+      "quoteVolume",
+      "highPrice",
+      "lowPrice",
+    ];
+    if (fields.some((field) => typeof row[field] !== "string")) continue;
+
+    const ticker: BinanceTicker = {
+      symbol: row.symbol,
+      baseAsset: market.baseAsset,
+      quoteAsset: market.quoteAsset,
+      lastPrice: row.lastPrice as string,
+      priceChangePercent: row.priceChangePercent as string,
+      quoteVolume: row.quoteVolume as string,
+      highPrice: row.highPrice as string,
+      lowPrice: row.lowPrice as string,
+    };
+
+    if (
+      !Number.isFinite(Number(ticker.lastPrice)) ||
+      !Number.isFinite(Number(ticker.priceChangePercent)) ||
+      !Number.isFinite(Number(ticker.quoteVolume)) ||
+      !Number.isFinite(Number(ticker.highPrice)) ||
+      !Number.isFinite(Number(ticker.lowPrice)) ||
+      Number(ticker.lastPrice) < 0 ||
+      Number(ticker.quoteVolume) < 0
+    ) {
+      continue;
+    }
+
+    tickers.push(ticker);
+  }
+
+  if (tickers.length === 0) {
+    throw new Error("Binance returned no active USDT-quoted Spot markets");
+  }
+
+  return tickers.sort(
+    (left, right) =>
+      Number(right.quoteVolume) - Number(left.quoteVolume),
+  );
 }
 
 export function formatMarketPrice(value: string): string {
@@ -142,22 +206,10 @@ export function formatMarketPercent(value: string): string {
   return (change > 0 ? "+" : "") + change.toFixed(2) + "%";
 }
 
-
-export type BinanceStreamStatus = "connecting" | "live" | "reconnecting";
-
-interface BinanceStreamTicker {
-  s?: unknown;
-  c?: unknown;
-  P?: unknown;
-  q?: unknown;
-  h?: unknown;
-  l?: unknown;
-}
-
 /**
- * Opens an official public Binance market-data WebSocket stream.
- * This stream is read-only and never authenticates or touches exchange accounts.
- * A single connection is intentionally recycled before Binance's 24-hour limit.
+ * Opens Binance's all-market 24-hour rolling ticker stream. Binance sends only
+ * symbols whose rolling statistics changed; this client filters to USDT-quoted
+ * Spot market symbols discovered via exchangeInfo.
  */
 export function subscribeBinanceTickers(
   onTickers: (tickers: BinanceTicker[]) => void,
@@ -169,10 +221,6 @@ export function subscribeBinanceTickers(
   let recycleTimer: ReturnType<typeof setTimeout> | null = null;
   let reconnectAttempt = 0;
   const latest = new Map<string, BinanceTicker>();
-  const streams = marketSymbols.map((symbol) => symbol.toLowerCase() + "@ticker");
-  const streamUrl =
-    "wss://data-stream.binance.vision/stream?streams=" +
-    streams.join("/");
 
   const clearTimers = () => {
     if (reconnectTimer) clearTimeout(reconnectTimer);
@@ -212,7 +260,7 @@ export function subscribeBinanceTickers(
     onStatus(reconnectAttempt === 0 ? "connecting" : "reconnecting");
 
     try {
-      const nextSocket = new WebSocket(streamUrl);
+      const nextSocket = new WebSocket(STREAM_URL);
       socket = nextSocket;
 
       nextSocket.onopen = () => {
@@ -220,7 +268,7 @@ export function subscribeBinanceTickers(
         reconnectAttempt = 0;
         onStatus("live");
 
-        // Binance stream connections are limited to 24 hours.
+        // Binance WebSocket connections have a 24-hour lifetime.
         recycleTimer = setTimeout(() => {
           if (socket !== nextSocket) return;
           closeSocket();
@@ -234,48 +282,20 @@ export function subscribeBinanceTickers(
           const parsed: unknown = JSON.parse(String(event.data));
           if (typeof parsed !== "object" || parsed === null) return;
           const envelope = parsed as { data?: unknown };
-          const payload = (envelope.data ?? parsed) as unknown;
-          if (typeof payload !== "object" || payload === null) return;
+          const payload = envelope.data ?? parsed;
+          const rows = Array.isArray(payload) ? payload : [payload];
+          const updated: BinanceTicker[] = [];
 
-          const row = payload as BinanceStreamTicker;
-          if (
-            typeof row.s !== "string" ||
-            typeof row.c !== "string" ||
-            typeof row.P !== "string" ||
-            typeof row.q !== "string" ||
-            typeof row.h !== "string" ||
-            typeof row.l !== "string"
-          ) {
-            return;
+          for (const row of rows) {
+            const ticker = parseStreamTicker(row);
+            if (!ticker) continue;
+            latest.set(ticker.symbol, ticker);
+            updated.push(ticker);
           }
 
-          const ticker: BinanceTicker = {
-            symbol: row.s,
-            lastPrice: row.c,
-            priceChangePercent: row.P,
-            quoteVolume: row.q,
-            highPrice: row.h,
-            lowPrice: row.l,
-          };
-
-          if (
-            !marketSymbols.includes(ticker.symbol) ||
-            !Number.isFinite(Number(ticker.lastPrice)) ||
-            !Number.isFinite(Number(ticker.priceChangePercent)) ||
-            !Number.isFinite(Number(ticker.quoteVolume)) ||
-            !Number.isFinite(Number(ticker.highPrice)) ||
-            !Number.isFinite(Number(ticker.lowPrice))
-          ) {
-            return;
+          if (updated.length > 0) {
+            onTickers(updated);
           }
-
-          latest.set(ticker.symbol, ticker);
-          onTickers(
-            Array.from(latest.values()).sort(
-              (left, right) =>
-                Number(right.quoteVolume) - Number(left.quoteVolume),
-            ),
-          );
         } catch {
           // Ignore malformed messages; the REST snapshot remains available.
         }
