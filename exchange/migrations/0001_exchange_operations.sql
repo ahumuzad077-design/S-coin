@@ -24,6 +24,11 @@ CREATE TABLE IF NOT EXISTS exchange_organisations (
 CREATE TABLE IF NOT EXISTS exchange_issuer_applications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organisation_id UUID NOT NULL REFERENCES exchange_organisations(id),
+    submitted_legal_name TEXT NOT NULL,
+    submitted_registration_country CHAR(2) NOT NULL,
+    submitted_registration_number TEXT NOT NULL,
+    submitted_registered_address TEXT NOT NULL,
+    submitted_website TEXT NOT NULL DEFAULT '',
     applicant_subject TEXT NOT NULL,
     applicant_organization_id TEXT NOT NULL,
     applicant_email TEXT NOT NULL,
