@@ -2,8 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createNativeTransferPreview,
+  createErc20TransferPreview,
   getEvmTransactionReceipt,
   parseNativeAmountToHex,
+  submitErc20Transfer,
   submitNativeTransfer,
 } from "./evmTransactions.ts";
 
@@ -20,6 +22,9 @@ class MockWallet {
     this.gasLimit = overrides.gasLimit ?? "0x5208";
     this.gasPrice = overrides.gasPrice ?? "0x3b9aca00";
     this.receipt = overrides.receipt ?? null;
+    this.tokenDecimals = overrides.tokenDecimals ?? 18;
+    this.tokenBalance = overrides.tokenBalance ?? 5n * 10n ** 18n;
+    this.contractCode = overrides.contractCode ?? "0x60006000";
     this.sent = [];
   }
 
@@ -35,6 +40,18 @@ class MockWallet {
         return this.gasLimit;
       case "eth_gasPrice":
         return this.gasPrice;
+      case "eth_getCode":
+        return this.contractCode;
+      case "eth_call": {
+        const data = params[0]?.data;
+        if (data === "0x313ce567") {
+          return "0x" + BigInt(this.tokenDecimals).toString(16).padStart(64, "0");
+        }
+        if (typeof data === "string" && data.startsWith("0x70a08231")) {
+          return "0x" + this.tokenBalance.toString(16).padStart(64, "0");
+        }
+        throw new Error("Unexpected eth_call data: " + data);
+      }
       case "eth_sendTransaction":
         this.sent.push(params[0]);
         return txHash;
@@ -136,4 +153,64 @@ test("parses mined transaction receipts and leaves pending receipts null", async
   const receipt = await getEvmTransactionReceipt(wallet, chainId, txHash);
   assert.equal(receipt?.status, "success");
   assert.equal(receipt?.blockNumber, "0x2a");
+});
+
+
+const token = "0x3333333333333333333333333333333333333333";
+
+test("prepares an ERC-20 transfer from contract metadata and balance", async () => {
+  const wallet = new MockWallet({ gasLimit: "0x186a0" });
+  const preview = await createErc20TransferPreview(wallet, {
+    chainId,
+    from,
+    to,
+    tokenAddress: token,
+    amount: "1.25",
+  });
+  assert.equal(preview.decimals, 18);
+  assert.equal(preview.amountBaseUnits, "1250000000000000000");
+  assert.equal(preview.estimatedGasFee, "0.0001");
+});
+
+test("rejects an ERC-20 transfer when the contract has no code", async () => {
+  await assert.rejects(
+    createErc20TransferPreview(new MockWallet({ contractCode: "0x" }), {
+      chainId,
+      from,
+      to,
+      tokenAddress: token,
+      amount: "1",
+    }),
+    /does not contain a deployed contract/,
+  );
+});
+
+test("rejects an ERC-20 transfer exceeding the connected account token balance", async () => {
+  await assert.rejects(
+    createErc20TransferPreview(new MockWallet({ tokenBalance: 1n }), {
+      chainId,
+      from,
+      to,
+      tokenAddress: token,
+      amount: "1",
+    }),
+    /Insufficient token balance/,
+  );
+});
+
+test("submits ERC-20 transfers only through the external wallet", async () => {
+  const wallet = new MockWallet({ gasLimit: "0x186a0" });
+  const preview = await createErc20TransferPreview(wallet, {
+    chainId,
+    from,
+    to,
+    tokenAddress: token,
+    amount: "1.25",
+  });
+  const hash = await submitErc20Transfer(wallet, preview);
+  assert.equal(hash, txHash);
+  assert.equal(wallet.sent.length, 1);
+  assert.equal(wallet.sent[0].to, token);
+  assert.equal(wallet.sent[0].value, "0x0");
+  assert.match(wallet.sent[0].data, /^0xa9059cbb/);
 });
