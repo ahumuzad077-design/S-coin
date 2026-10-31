@@ -41,7 +41,7 @@ function formatWei(value: bigint): string {
 
 export function parseNativeAmountToHex(amount: string): string {
   const normalized = amount.trim();
-  if (!/^(?:0|[1-9]\\d{0,77})(?:\\.\\d{1,18})?$/.test(normalized)) {
+  if (!/^(?:0|[1-9]\d{0,77})(?:\.\d{1,18})?$/.test(normalized)) {
     throw new Error("Enter a positive amount with no more than 18 decimal places.");
   }
   const [wholePart, fractionalPart = ""] = normalized.split(".");
