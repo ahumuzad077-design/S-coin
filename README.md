@@ -190,9 +190,10 @@ This is an early wallet and market-data stage, not a standalone self-custody
 wallet or exchange. It does not generate or store recovery phrases or private
 keys. It supports user-approved native-asset transfers through an external
 EVM wallet only on chain IDs listed in
-EXPO_PUBLIC_EVM_TRANSFER_CHAIN_IDS; the default is Sepolia testnet. It does not
-send native S Coin, transfer ERC-20 tokens, execute swaps, place Binance
-orders, or process deposits/withdrawals. Browser extension connections are
+EXPO_PUBLIC_EVM_TRANSFER_CHAIN_IDS; the default is Sepolia testnet. Standard
+ERC-20 sends are also supported through external wallet approval on those
+configured networks. It does not send native S Coin, execute swaps, place
+Binance orders, or process deposits/withdrawals. Browser extension connections are
 supported in web builds; native MetaMask Connect requires a custom Expo
 development/native build and trusted RPC configuration. Keplr mobile pairing
 is still not configured. 0x and Skip integrations return quote/route previews
