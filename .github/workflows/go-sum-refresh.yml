@@ -1,0 +1,36 @@
+name: Resolve Go dependency checksums
+
+on:
+  pull_request:
+    paths:
+      - "go.mod"
+      - ".github/workflows/go-sum-refresh.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  resolve-checksums:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+          check-latest: true
+
+      - name: Resolve upgraded dependency checksums
+        run: |
+          go mod download github.com/ethereum/go-ethereum
+          go mod download github.com/hashicorp/go-getter
+          go mod download github.com/ulikunitz/xz
+
+      - name: Upload updated go.sum for commit
+        uses: actions/upload-artifact@v4
+        with:
+          name: scoin-updated-go-sum
+          path: go.sum
+          if-no-files-found: error
