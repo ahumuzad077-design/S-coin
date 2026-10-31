@@ -15,10 +15,13 @@ import {
 } from "react-native";
 import {
   BinanceTicker,
+  fetchBinanceMarketDetails,
   fetchBinanceTickers,
   formatMarketPercent,
   formatMarketPrice,
   subscribeBinanceTickers,
+  type BinanceCandle,
+  type BinanceMarketDetails,
   type BinanceStreamStatus,
 } from "./marketData";
 import {
@@ -56,6 +59,9 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
   const [walletError, setWalletError] = useState("");
   const [amount, setAmount] = useState("1");
   const [selectedSymbol, setSelectedSymbol] = useState("BTCUSDT");
+  const [marketDetails, setMarketDetails] = useState<BinanceMarketDetails | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState("");
   const [sellToken, setSellToken] = useState("");
   const [buyToken, setBuyToken] = useState("");
   const [sellAmount, setSellAmount] = useState("1");
@@ -143,6 +149,39 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
     () => tickers.find((ticker) => ticker.symbol === selectedSymbol) ?? null,
     [selectedSymbol, tickers],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    setDetailsLoading(true);
+    setDetailsError("");
+    setMarketDetails(null);
+
+    void fetchBinanceMarketDetails(selectedSymbol)
+      .then((details) => {
+        if (!cancelled) setMarketDetails(details);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setDetailsError(
+            error instanceof Error ? error.message : "Could not load order book and recent trades.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setDetailsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSymbol]);
+
+  const candleRange = useMemo(() => {
+    const values = marketDetails?.candles.map((candle) => Number(candle.close)) ?? [];
+    if (values.length === 0) return { min: 0, max: 0 };
+    return { min: Math.min(...values), max: Math.max(...values) };
+  }, [marketDetails]);
+
 
   const indicativeValue = useMemo(() => {
     const quantity = Number(amount);
@@ -461,6 +500,111 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
                   </Text>
                 </View>
               </View>
+            </View>
+          ) : null}
+
+          {selectedTicker ? (
+            <View style={styles.marketDetailsPanel}>
+              <View style={styles.detailHeader}>
+                <View>
+                  <Text style={styles.eyebrow}>MARKET MICROSTRUCTURE</Text>
+                  <Text style={styles.detailTitle}>{selectedTicker.symbol} · live market details</Text>
+                </View>
+                {detailsLoading ? (
+                  <ActivityIndicator color={palette.accent} size="small" />
+                ) : (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setDetailsLoading(true);
+                      setDetailsError("");
+                      void fetchBinanceMarketDetails(selectedSymbol)
+                        .then(setMarketDetails)
+                        .catch((error) => setDetailsError(
+                          error instanceof Error ? error.message : "Could not refresh market details.",
+                        ))
+                        .finally(() => setDetailsLoading(false));
+                    }}
+                    style={styles.refreshButton}
+                  >
+                    <Text style={styles.refreshText}>↻ Refresh</Text>
+                  </Pressable>
+                )}
+              </View>
+
+              {detailsError ? (
+                <Text accessibilityRole="alert" style={styles.inlineError}>{detailsError}</Text>
+              ) : null}
+
+              {marketDetails ? (
+                <>
+                  <Text style={styles.detailSectionLabel}>24 × 1H CANDLES · CLOSE PRICE HISTORY</Text>
+                  <View style={styles.candleChart}>
+                    {marketDetails.candles.map((candle: BinanceCandle) => {
+                      const close = Number(candle.close);
+                      const spread = Math.max(candleRange.max - candleRange.min, Math.abs(close) * 0.000001, 0.00000001);
+                      const barHeight = Math.max(5, ((close - candleRange.min) / spread) * 54 + 5);
+                      const rising = Number(candle.close) >= Number(candle.open);
+                      return (
+                        <View
+                          key={candle.openTime}
+                          style={[
+                            styles.candleBar,
+                            { height: barHeight },
+                            rising ? styles.candleBarUp : styles.candleBarDown,
+                          ]}
+                        />
+                      );
+                    })}
+                  </View>
+
+                  <View style={styles.orderBookGrid}>
+                    <View style={styles.orderBookColumn}>
+                      <Text style={styles.detailSectionLabel}>TOP BIDS</Text>
+                      {marketDetails.bids.slice(0, 8).map((level, index) => (
+                        <View key={"bid-" + index} style={styles.orderBookRow}>
+                          <Text style={styles.orderBookBid}>{formatMarketPrice(level.price)}</Text>
+                          <Text style={styles.orderBookQuantity}>{Number(level.quantity).toLocaleString(undefined, { maximumFractionDigits: 4 })}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    <View style={styles.orderBookColumn}>
+                      <Text style={styles.detailSectionLabel}>TOP ASKS</Text>
+                      {marketDetails.asks.slice(0, 8).map((level, index) => (
+                        <View key={"ask-" + index} style={styles.orderBookRow}>
+                          <Text style={styles.orderBookAsk}>{formatMarketPrice(level.price)}</Text>
+                          <Text style={styles.orderBookQuantity}>{Number(level.quantity).toLocaleString(undefined, { maximumFractionDigits: 4 })}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+
+                  <Text style={styles.detailSectionLabel}>RECENT TRADES</Text>
+                  {marketDetails.trades.slice(0, 8).map((trade) => (
+                    <View key={trade.id} style={styles.recentTradeRow}>
+                      <Text style={trade.buyerIsMaker ? styles.orderBookAsk : styles.orderBookBid}>
+                        {trade.buyerIsMaker ? "SELL" : "BUY"}
+                      </Text>
+                      <Text style={styles.recentTradePrice}>{formatMarketPrice(trade.price)}</Text>
+                      <Text style={styles.orderBookQuantity}>
+                        {Number(trade.quantity).toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                      </Text>
+                      <Text style={styles.tradeTime}>
+                        {new Date(trade.time).toLocaleTimeString()}
+                      </Text>
+                    </View>
+                  ))}
+                  <Text style={styles.sourceNote}>
+                    Public order-book snapshot and recent trades from Binance.
+                    This is market information only, not an executable order.
+                  </Text>
+                </>
+              ) : detailsLoading ? (
+                <View style={styles.loading}>
+                  <ActivityIndicator color={palette.accent} />
+                  <Text style={styles.muted}>Loading market depth and trade history…</Text>
+                </View>
+              ) : null}
             </View>
           ) : null}
 
@@ -989,6 +1133,23 @@ const styles = StyleSheet.create({
   favoriteGlyphActive: { color: palette.accent },
   emptyMarkets: { alignItems: "center", padding: 24, gap: 7 },
   emptyMarketsTitle: { color: palette.ink, fontSize: 12, fontWeight: "800" },
+  marketDetailsPanel: { padding: 14, borderRadius: 10, backgroundColor: "#0F1715", borderWidth: 1, borderColor: palette.border, marginTop: 12 },
+  detailHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  detailTitle: { color: palette.ink, fontSize: 11, fontWeight: "800", marginTop: 5 },
+  detailSectionLabel: { color: palette.muted, fontSize: 8, fontWeight: "800", letterSpacing: 0.8, marginTop: 14, marginBottom: 7 },
+  candleChart: { height: 66, flexDirection: "row", alignItems: "flex-end", gap: 3, paddingHorizontal: 3 },
+  candleBar: { flex: 1, borderRadius: 2, minWidth: 2 },
+  candleBarUp: { backgroundColor: "#88C47A" },
+  candleBarDown: { backgroundColor: "#C86F67" },
+  orderBookGrid: { flexDirection: "row", gap: 12, marginTop: 2 },
+  orderBookColumn: { flex: 1, minWidth: 0 },
+  orderBookRow: { minHeight: 22, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 4 },
+  orderBookBid: { color: palette.positive, fontSize: 8, fontWeight: "700" },
+  orderBookAsk: { color: palette.negative, fontSize: 8, fontWeight: "700" },
+  orderBookQuantity: { color: palette.muted, fontSize: 8 },
+  recentTradeRow: { minHeight: 26, flexDirection: "row", alignItems: "center", gap: 8, borderTopWidth: 1, borderTopColor: "#202B29" },
+  recentTradePrice: { flex: 1, color: palette.ink, textAlign: "right", fontSize: 8, fontWeight: "700" },
+  tradeTime: { color: palette.muted, fontSize: 7, minWidth: 55, textAlign: "right" },
   selectedMarketCard: { padding: 13, borderRadius: 10, backgroundColor: palette.panelRaised, marginTop: 14, borderWidth: 1, borderColor: palette.border },
   selectedMarketHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   selectedMarketTitle: { color: palette.ink, fontSize: 13, fontWeight: "800", marginTop: 5 },
