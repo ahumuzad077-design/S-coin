@@ -15,3 +15,8 @@ jobs:
       - name: Tests
         run: |
           make test
+      - name: Test Meridian paper-market simulator
+        run: |
+          cd exchange
+          go test -race ./...
+          go vet ./...
