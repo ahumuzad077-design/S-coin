@@ -181,9 +181,11 @@ HTTPS, monitoring and abuse controls.
 
 - No S Coin-generated seed phrase, independent self-custody wallet, private
   key storage, seed backup, key export, or account recovery workflow.
-- No S Coin Cosmos transaction signing, send/receive, fee calculation or
-  transaction monitoring.
-- No native Keplr/Cosmos mobile wallet pairing.
+- Browser Keplr signing and native S Coin bank transfers are implemented only
+  when the operator enables the feature and provides an exact chain ID, trusted
+  CometBFT RPC and approved gas price. The default is off.
+- No native Keplr/Cosmos mobile wallet pairing; mobile S Coin transfers remain
+  unavailable until a supported wallet session is implemented.
 - Native EVM asset sending is limited to explicitly configured chain IDs
   (Sepolia only by default) and always requires the external wallet's explicit
   approval. This is not an independent S Coin self-custody wallet.
@@ -268,16 +270,16 @@ Before customer funds or fiat rails are enabled:
 
 ## Remaining implementation work
 
-1. Obtain the exact S Coin testnet chain ID and trusted RPC/REST endpoint; add
-   its chain metadata to the Cosmos ecosystem registries.
-2. Add native Cosmos signing, fee estimation, simulation and transaction
-   monitoring using a maintained Cosmos wallet library.
-3. Add native Keplr/Cosmos wallet pairing.
-4. Complete an independent security audit and test end-to-end flows with
+1. Obtain and verify the actual S Coin testnet chain ID, trusted CometBFT
+   RPC/REST endpoints and operator-approved gas price. Keep the browser send
+   feature disabled until these are published and validated.
+2. Add native Keplr/Cosmos mobile wallet pairing and signed transaction
+   handling for Android/iOS.
+3. Complete an independent security audit and test end-to-end flows with
    dedicated testnet accounts before any production use.
-5. Verify S Coin chain/provider support, liquidity and IBC routes before
+4. Verify S Coin chain/provider support, liquidity and IBC routes before
    enabling its native asset for swaps.
-6. Keep production Binance credentials, trading, deposits and withdrawals
+5. Keep production Binance credentials, trading, deposits and withdrawals
    outside this integration until separate legal, operational and security
    approval exists. The isolated Spot Testnet desk is already implemented.
 
