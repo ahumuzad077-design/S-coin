@@ -25,6 +25,7 @@ import {
   type BinanceStreamStatus,
 } from "./marketData";
 import { BinanceTestnetPanel } from "./BinanceTestnetPanel";
+import { ScoinTransferPanel } from "./ScoinTransferPanel";
 import { CosmosTransferPanel } from "./CosmosTransferPanel";
 import {
   WalletConnection,
@@ -1093,6 +1094,15 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
 
         <View style={styles.rightColumn}>
           <BinanceTestnetPanel selectedMarket={selectedSymbol} />
+          <ScoinTransferPanel
+            chainId={chainId}
+            wallet={scoinWallet}
+            onTransferComplete={async () => {
+              if (scoinWallet) {
+                setScoinBalances(await getAccountBalances(apiUrl, scoinWallet.address));
+              }
+            }}
+          />
           <CosmosTransferPanel
             chainId={chainId}
             wallet={scoinWallet}
