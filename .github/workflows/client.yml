@@ -38,6 +38,9 @@ jobs:
       - name: Test Binance Spot Testnet API signing and orders
         run: npm run test:binance
 
+      - name: Test EVM quote binding and response validation
+        run: npm run test:swap
+
       - name: TypeScript typecheck
         run: npx tsc --noEmit
 
