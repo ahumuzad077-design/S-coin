@@ -326,3 +326,139 @@ export function subscribeBinanceTickers(
     closeSocket();
   };
 }
+
+
+export interface BinanceOrderBookLevel {
+  price: string;
+  quantity: string;
+}
+
+export interface BinanceRecentTrade {
+  id: number;
+  price: string;
+  quantity: string;
+  time: number;
+  buyerIsMaker: boolean;
+}
+
+export interface BinanceCandle {
+  openTime: number;
+  open: string;
+  high: string;
+  low: string;
+  close: string;
+  volume: string;
+}
+
+export interface BinanceMarketDetails {
+  bids: BinanceOrderBookLevel[];
+  asks: BinanceOrderBookLevel[];
+  trades: BinanceRecentTrade[];
+  candles: BinanceCandle[];
+}
+
+/**
+ * Loads a compact, read-only technical snapshot for one verified USDT market.
+ * Depth, recent trades and candles use public Binance REST endpoints only.
+ */
+export async function fetchBinanceMarketDetails(
+  symbol: string,
+): Promise<BinanceMarketDetails> {
+  if (!knownUsdtMarkets.has(symbol)) {
+    throw new Error("Select a currently trading Binance USDT Spot pair first.");
+  }
+
+  const query = "symbol=" + encodeURIComponent(symbol);
+  const [depth, candlePayload, tradePayload] = await Promise.all([
+    getJson<{ bids?: unknown[]; asks?: unknown[] }>(
+      REST_BASE_URL + "/api/v3/depth?" + query + "&limit=20",
+    ),
+    getJson<unknown>(
+      REST_BASE_URL + "/api/v3/klines?" + query + "&interval=1h&limit=24",
+    ),
+    getJson<unknown>(
+      REST_BASE_URL + "/api/v3/trades?" + query + "&limit=10",
+    ),
+  ]);
+
+  const parseLevels = (rows: unknown[] | undefined): BinanceOrderBookLevel[] => {
+    if (!Array.isArray(rows)) return [];
+    return rows.slice(0, 10).flatMap((row) => {
+      if (
+        !Array.isArray(row) ||
+        typeof row[0] !== "string" ||
+        typeof row[1] !== "string" ||
+        !Number.isFinite(Number(row[0])) ||
+        !Number.isFinite(Number(row[1]))
+      ) {
+        return [];
+      }
+      return [{ price: row[0], quantity: row[1] }];
+    });
+  };
+
+  if (!Array.isArray(candlePayload) || !Array.isArray(tradePayload)) {
+    throw new Error("Binance returned incomplete market detail data");
+  }
+
+  const candles: BinanceCandle[] = candlePayload.flatMap((row) => {
+    if (
+      !Array.isArray(row) ||
+      typeof row[0] !== "number" ||
+      typeof row[1] !== "string" ||
+      typeof row[2] !== "string" ||
+      typeof row[3] !== "string" ||
+      typeof row[4] !== "string" ||
+      typeof row[5] !== "string"
+    ) {
+      return [];
+    }
+    if (
+      !Number.isFinite(Number(row[1])) ||
+      !Number.isFinite(Number(row[2])) ||
+      !Number.isFinite(Number(row[3])) ||
+      !Number.isFinite(Number(row[4])) ||
+      !Number.isFinite(Number(row[5]))
+    ) {
+      return [];
+    }
+    return [{
+      openTime: row[0],
+      open: row[1],
+      high: row[2],
+      low: row[3],
+      close: row[4],
+      volume: row[5],
+    }];
+  });
+
+  const trades: BinanceRecentTrade[] = tradePayload.flatMap((row) => {
+    if (typeof row !== "object" || row === null) return [];
+    const trade = row as Record<string, unknown>;
+    if (
+      typeof trade.id !== "number" ||
+      typeof trade.price !== "string" ||
+      typeof trade.qty !== "string" ||
+      typeof trade.time !== "number" ||
+      typeof trade.isBuyerMaker !== "boolean" ||
+      !Number.isFinite(Number(trade.price)) ||
+      !Number.isFinite(Number(trade.qty))
+    ) {
+      return [];
+    }
+    return [{
+      id: trade.id,
+      price: trade.price,
+      quantity: trade.qty,
+      time: trade.time,
+      buyerIsMaker: trade.isBuyerMaker,
+    }];
+  });
+
+  return {
+    bids: parseLevels(depth.bids),
+    asks: parseLevels(depth.asks),
+    trades,
+    candles,
+  };
+}
