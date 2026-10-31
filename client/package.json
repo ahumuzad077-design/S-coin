@@ -15,7 +15,9 @@
     "buffer": "^6.0.3",
     "readable-stream": "^4.8.0",
     "react-native-get-random-values": "2.0.0",
-    "util": "^0.12.5"
+    "util": "^0.12.5",
+    "@noble/hashes": "2.4.0",
+    "expo-secure-store": "~58.0.2"
   },
   "devDependencies": {
     "@types/react": "~19.3.0",
