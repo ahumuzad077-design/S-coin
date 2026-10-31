@@ -28,6 +28,62 @@ interface WalletWindow extends Window {
   keplr?: KeplrProvider;
 }
 
+interface Eip6963Announcement {
+  info?: {
+    name?: string;
+    rdns?: string;
+  };
+  provider?: EvmProvider;
+}
+
+async function discoverEvmProvider(): Promise<{ provider: EvmProvider; name: string }> {
+  const walletWindow = getWalletWindow();
+  const candidates: Array<{ provider: EvmProvider; name: string; rdns: string }> = [];
+
+  const onAnnouncement = (event: Event) => {
+    const detail = (event as CustomEvent<Eip6963Announcement>).detail;
+    if (
+      detail &&
+      detail.provider &&
+      typeof detail.provider.request === "function" &&
+      typeof detail.info?.name === "string"
+    ) {
+      candidates.push({
+        provider: detail.provider,
+        name: detail.info.name,
+        rdns: detail.info.rdns ?? "",
+      });
+    }
+  };
+
+  walletWindow.addEventListener("eip6963:announceProvider", onAnnouncement);
+  walletWindow.dispatchEvent(new Event("eip6963:requestProvider"));
+  await new Promise((resolve) => setTimeout(resolve, 180));
+  walletWindow.removeEventListener("eip6963:announceProvider", onAnnouncement);
+
+  const metaMask = candidates.find(
+    (candidate) =>
+      candidate.rdns.toLowerCase() === "io.metamask" ||
+      candidate.name.toLowerCase().includes("metamask"),
+  );
+  if (metaMask) {
+    return { provider: metaMask.provider, name: metaMask.name };
+  }
+
+  const firstAvailable = candidates[0];
+  if (firstAvailable) {
+    return { provider: firstAvailable.provider, name: firstAvailable.name };
+  }
+
+  if (walletWindow.ethereum) {
+    return { provider: walletWindow.ethereum, name: "Injected EVM wallet" };
+  }
+
+  throw new Error(
+    "No EVM wallet was detected. Open S Coin in MetaMask or install a compatible browser wallet.",
+  );
+}
+
 function getWalletWindow(): WalletWindow {
   if (typeof window === "undefined") {
     throw new Error("Wallet extensions are available in a supported web browser.");
@@ -41,13 +97,7 @@ function getWalletWindow(): WalletWindow {
  * It never requests a seed phrase or signs/submits a transaction.
  */
 export async function connectEvmWallet(): Promise<WalletConnection> {
-  const provider = getWalletWindow().ethereum;
-  if (!provider) {
-    throw new Error(
-      "No EVM wallet was detected. Open S Coin in MetaMask or install a compatible browser wallet.",
-    );
-  }
-
+  const { provider, name } = await discoverEvmProvider();
   const accounts = await provider.request({ method: "eth_requestAccounts" });
   if (
     !Array.isArray(accounts) ||
@@ -58,13 +108,13 @@ export async function connectEvmWallet(): Promise<WalletConnection> {
   }
 
   const rawChainId = await provider.request({ method: "eth_chainId" });
-  if (typeof rawChainId !== "string") {
-    throw new Error("The EVM wallet did not return its network identifier.");
+  if (typeof rawChainId !== "string" || !/^0x[0-9a-fA-F]+$/.test(rawChainId)) {
+    throw new Error("The EVM wallet did not return a valid network identifier.");
   }
 
   return {
     kind: "evm",
-    name: "MetaMask / EVM wallet",
+    name,
     address: accounts[0],
     chainId: rawChainId,
   };
