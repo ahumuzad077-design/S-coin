@@ -19,5 +19,6 @@ jobs:
       - name: Test MERIDIAN real exchange operations service
         run: |
           cd exchange
+          go mod tidy
           go test -race ./...
           go vet ./...
