@@ -17,6 +17,7 @@ import {
   Platform,
   useWindowDimensions,
 } from "react-native";
+import { ExchangeHub } from "./src/ExchangeHub";
 import {
   AccountTransaction,
   ChainStatus,
@@ -30,7 +31,7 @@ import {
   shorten,
 } from "./src/chain";
 
-type Screen = "overview" | "wallet" | "explorer" | "validators" | "settings";
+type Screen = "overview" | "wallet" | "exchange" | "explorer" | "validators" | "settings";
 
 const initialApiUrl =
   process.env.EXPO_PUBLIC_SCOIN_API_URL ??
@@ -42,6 +43,7 @@ const initialApiUrl =
 const navigation: { id: Screen; label: string; glyph: string }[] = [
   { id: "overview", label: "Overview", glyph: "◈" },
   { id: "wallet", label: "Wallet", glyph: "▣" },
+  { id: "exchange", label: "Markets", glyph: "↗" },
   { id: "explorer", label: "Explorer", glyph: "⌕" },
   { id: "validators", label: "Validators", glyph: "⌘" },
 ];
@@ -167,8 +169,10 @@ export default function App() {
       ? "Your network at a glance"
       : screen === "wallet"
         ? "Read-only wallet"
-        : screen === "explorer"
-          ? "Network explorer"
+        : screen === "exchange"
+          ? "Markets & wallet"
+          : screen === "explorer"
+            ? "Network explorer"
           : screen === "validators"
             ? "Validator set"
             : "Connection settings";
@@ -290,6 +294,12 @@ export default function App() {
                 loading={loadingAccount}
                 onAddressChange={setAddressDraft}
                 onSubmit={() => void loadAccount()}
+              />
+            )}
+            {screen === "exchange" && (
+              <ExchangeHub
+                compact={compact}
+                chainId={process.env.EXPO_PUBLIC_SCOIN_CHAIN_ID ?? chain?.chainId ?? "scoin"}
               />
             )}
             {screen === "explorer" && (
