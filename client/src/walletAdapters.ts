@@ -12,7 +12,17 @@ interface EvmProvider {
     method: string;
     params?: unknown[];
   }): Promise<unknown>;
+  on?(
+    event: "accountsChanged" | "chainChanged",
+    listener: (value: unknown) => void,
+  ): void;
+  removeListener?(
+    event: "accountsChanged" | "chainChanged",
+    listener: (value: unknown) => void,
+  ): void;
 }
+
+let activeEvmProvider: EvmProvider | null = null;
 
 interface KeplrKey {
   bech32Address?: string;
@@ -112,12 +122,65 @@ export async function connectEvmWallet(): Promise<WalletConnection> {
     throw new Error("The EVM wallet did not return a valid network identifier.");
   }
 
+  activeEvmProvider = provider;
   return {
     kind: "evm",
     name,
     address: accounts[0],
     chainId: rawChainId,
   };
+}
+
+export function subscribeEvmWalletChanges(onChange: () => void): () => void {
+  const provider = activeEvmProvider;
+  if (!provider?.on) return () => undefined;
+
+  const handleAccountsChanged = () => onChange();
+  const handleChainChanged = () => onChange();
+  provider.on("accountsChanged", handleAccountsChanged);
+  provider.on("chainChanged", handleChainChanged);
+
+  return () => {
+    provider.removeListener?.("accountsChanged", handleAccountsChanged);
+    provider.removeListener?.("chainChanged", handleChainChanged);
+  };
+}
+
+export async function getErc20TokenDecimals(
+  tokenAddress: string,
+  expectedChainId: string,
+): Promise<number> {
+  if (!/^0x[a-fA-F0-9]{40}$/.test(tokenAddress)) {
+    throw new Error("Enter a valid ERC-20 token contract address first.");
+  }
+
+  const provider = activeEvmProvider;
+  if (!provider) {
+    throw new Error("Connect an EVM wallet before reading token metadata.");
+  }
+
+  const currentChainId = await provider.request({ method: "eth_chainId" });
+  if (currentChainId !== expectedChainId) {
+    throw new Error("The connected wallet network changed. Reconnect before reading token metadata.");
+  }
+
+  const result = await provider.request({
+    method: "eth_call",
+    params: [{ to: tokenAddress, data: "0x313ce567" }, "latest"],
+  });
+
+  if (
+    typeof result !== "string" ||
+    !/^0x[0-9a-fA-F]{64}$/.test(result)
+  ) {
+    throw new Error("The token contract returned an invalid decimals value.");
+  }
+
+  const decimals = Number(BigInt(result));
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) {
+    throw new Error("The token contract returned unsupported decimal precision.");
+  }
+  return decimals;
 }
 
 /**
