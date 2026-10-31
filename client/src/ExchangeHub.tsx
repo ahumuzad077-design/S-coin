@@ -28,6 +28,7 @@ import {
   WalletConnection,
   connectEvmWallet,
   connectScoinWallet,
+  disconnectEvmWallet,
   getErc20TokenDecimals,
   shortenWalletAddress,
   subscribeEvmWalletChanges,
@@ -227,6 +228,20 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
 
   const browserWalletsAvailable = Platform.OS === "web";
   const swapApiBaseUrl = process.env.EXPO_PUBLIC_SWAP_API_URL ?? "";
+
+  const clearEvmWallet = async () => {
+    try {
+      await disconnectEvmWallet();
+      setEvmWallet(null);
+      setEvmQuote(null);
+      setQuoteError("");
+      setWalletError("");
+    } catch (error) {
+      setWalletError(
+        error instanceof Error ? error.message : "Could not disconnect the EVM wallet.",
+      );
+    }
+  };
 
   const getCosmosRoutePreview = async () => {
     setCosmosRouteLoading(true);
@@ -625,11 +640,11 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
 
             {!browserWalletsAvailable ? (
               <View style={styles.warning}>
-                <Text style={styles.warningTitle}>Mobile wallet session not configured</Text>
+                <Text style={styles.warningTitle}>Keplr is currently browser-only</Text>
                 <Text style={styles.warningBody}>
-                  This build currently detects browser-injected wallets. A
-                  native WalletConnect / MetaMask Connect session must be
-                  configured before in-app mobile wallet pairing is available.
+                  MetaMask Connect is enabled for native Android and iOS
+                  builds. Keplr still needs a supported mobile Cosmos wallet
+                  session and a verified S Coin chain configuration.
                 </Text>
               </View>
             ) : null}
@@ -649,13 +664,8 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
 
             <Pressable
               accessibilityRole="button"
-              disabled={!browserWalletsAvailable}
               onPress={() => void connectEvm()}
-              style={[
-                styles.walletButton,
-                styles.walletButtonSecondary,
-                !browserWalletsAvailable && styles.disabled,
-              ]}
+              style={[styles.walletButton, styles.walletButtonSecondary]}
             >
               <Text style={styles.walletButtonTitle}>Connect MetaMask / EVM</Text>
               <Text style={styles.walletButtonSub}>Ethereum-compatible accounts</Text>
@@ -685,8 +695,12 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
                 <Text style={styles.connectedMeta}>
                   {evmWallet.name} · {evmWallet.chainId}
                 </Text>
-                <Pressable onPress={() => setEvmWallet(null)}>
-                  <Text style={styles.disconnectText}>Clear local display</Text>
+                <Pressable onPress={() => void clearEvmWallet()}>
+                  <Text style={styles.disconnectText}>
+                    {evmWallet.name === "MetaMask Connect"
+                      ? "Disconnect MetaMask session"
+                      : "Clear connected address"}
+                  </Text>
                 </Pressable>
               </View>
             ) : null}
@@ -698,8 +712,8 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
             ) : null}
 
             <Text style={styles.sourceNote}>
-              S Coin never asks for a seed phrase here. Connecting displays a
-              public address only; this first stage does not sign or send funds.
+              S Coin never asks for a recovery phrase here. Connecting displays
+              a public address only; this release does not sign or send funds.
             </Text>
           </View>
 
