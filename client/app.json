@@ -29,6 +29,12 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
-    "scheme": "scoin"
+    "scheme": "scoin",
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
   }
 }
