@@ -28,6 +28,14 @@ interface EvmProvider {
 }
 
 let activeEvmProvider: EvmProvider | null = null;
+
+export function getActiveEvmProvider(): EvmProvider {
+  if (!activeEvmProvider) {
+    throw new Error("Connect an EVM wallet before continuing.");
+  }
+  return activeEvmProvider;
+}
+
 type MetaMaskConnectClient = Awaited<ReturnType<typeof createEVMClient>>;
 let nativeMetaMaskClient: MetaMaskConnectClient | null = null;
 let nativeMetaMaskClientPromise: ReturnType<typeof createEVMClient> | null = null;
@@ -190,6 +198,27 @@ export async function connectEvmWallet(): Promise<WalletConnection> {
     chainId: result.chainId,
     ...nativeBalance,
   };
+}
+
+export async function refreshConnectedEvmBalance(): Promise<{
+  nativeBalance?: string;
+  nativeSymbol: string;
+}> {
+  const provider = getActiveEvmProvider();
+  const [chainId, accounts] = await Promise.all([
+    provider.request({ method: "eth_chainId" }),
+    provider.request({ method: "eth_accounts" }),
+  ]);
+  if (
+    typeof chainId !== "string" ||
+    !/^0x[0-9a-fA-F]+$/.test(chainId) ||
+    !Array.isArray(accounts) ||
+    typeof accounts[0] !== "string" ||
+    !/^0x[a-fA-F0-9]{40}$/.test(accounts[0])
+  ) {
+    throw new Error("The connected wallet session is no longer available.");
+  }
+  return readEvmNativeBalance(provider, accounts[0], chainId);
 }
 
 export async function disconnectEvmWallet(): Promise<void> {
