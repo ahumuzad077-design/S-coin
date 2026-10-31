@@ -99,7 +99,8 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
 
   useEffect(() => {
     void refreshMarkets();
-    return subscribeBinanceTickers(
+    const snapshotTimer = setInterval(() => void refreshMarkets(), 5 * 60 * 1000);
+    const unsubscribe = subscribeBinanceTickers(
       (nextTickers) => setTickers((current) => {
         const merged = new Map<string, BinanceTicker>();
         for (const ticker of current) merged.set(ticker.symbol, ticker);
@@ -110,6 +111,11 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
       }),
       setStreamStatus,
     );
+
+    return () => {
+      clearInterval(snapshotTimer);
+      unsubscribe();
+    };
   }, [refreshMarkets]);
 
   useEffect(() => {
