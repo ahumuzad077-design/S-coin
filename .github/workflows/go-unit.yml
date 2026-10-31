@@ -15,3 +15,9 @@ jobs:
       - name: Tests
         run: |
           make test
+
+      - name: Test MERIDIAN real exchange operations service
+        run: |
+          cd exchange
+          go test -race ./...
+          go vet ./...
