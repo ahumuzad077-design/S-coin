@@ -177,6 +177,10 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
       setEvmWallet(null);
       setEvmQuote(null);
       setQuoteError("Your EVM wallet account or network changed. Reconnect and request a fresh quote.");
+      setNativePreview(null);
+      setNativeTransferHash("");
+      setNativeTransferStatus("");
+      setNativeTransferError("Wallet account or network changed. The previous transfer preview has been cleared.");
     });
   }, [evmWallet]);
 
@@ -293,6 +297,15 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
     setNativePreview(null);
     try {
       if (!evmWallet) throw new Error("Connect MetaMask before preparing a transfer.");
+      const enabledChains = (process.env.EXPO_PUBLIC_EVM_TRANSFER_CHAIN_IDS ?? "0xaa36a7")
+        .split(",")
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean);
+      if (!enabledChains.includes(evmWallet.chainId.toLowerCase())) {
+        throw new Error(
+          "Native transfers are disabled on this network. Configure its exact chain ID in EXPO_PUBLIC_EVM_TRANSFER_CHAIN_IDS only after testnet validation and security review.",
+        );
+      }
       const preview = await createNativeTransferPreview(getActiveEvmProvider(), {
         chainId: evmWallet.chainId,
         from: evmWallet.address,
@@ -315,6 +328,13 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
     try {
       if (!evmWallet || !nativePreview) {
         throw new Error("Prepare and review the transfer before continuing.");
+      }
+      const enabledChains = (process.env.EXPO_PUBLIC_EVM_TRANSFER_CHAIN_IDS ?? "0xaa36a7")
+        .split(",")
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean);
+      if (!enabledChains.includes(evmWallet.chainId.toLowerCase())) {
+        throw new Error("Native transfers are disabled on this network.");
       }
       const provider = getActiveEvmProvider();
       const hash = await submitNativeTransfer(provider, nativePreview);
@@ -361,6 +381,10 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
       setEvmWallet(null);
       setEvmQuote(null);
       setQuoteError("");
+      setNativePreview(null);
+      setNativeTransferHash("");
+      setNativeTransferStatus("");
+      setNativeTransferError("");
       setWalletError("");
     } catch (error) {
       setWalletError(
@@ -837,8 +861,8 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
             {evmWallet ? (
               <View style={styles.connectedWallet}>
                 <Text style={styles.connectedLabel}>EVM · CONNECTED</Text>
-                <Text style={styles.connectedAddress}>
-                  {shortenWalletAddress(evmWallet.address)}
+                <Text selectable style={styles.connectedAddress}>
+                  {evmWallet.address}
                 </Text>
                 <Text style={styles.connectedMeta}>
                   {evmWallet.name} · {evmWallet.chainId}
