@@ -86,6 +86,7 @@ interface KeplrKey {
 interface KeplrProvider {
   enable(chainId: string): Promise<void>;
   getKey(chainId: string): Promise<KeplrKey>;
+  getOfflineSigner?(chainId: string): unknown;
 }
 
 interface WalletWindow extends Window {
@@ -303,6 +304,17 @@ export async function connectScoinWallet(
     address: key.bech32Address,
     chainId,
   };
+}
+
+export function getScoinOfflineSigner(chainId: string): unknown {
+  if (!chainId.trim()) {
+    throw new Error("Configure the exact verified S Coin chain ID before signing.");
+  }
+  const keplr = getWalletWindow().keplr;
+  if (!keplr?.getOfflineSigner) {
+    throw new Error("Keplr does not expose a signing interface in this browser session.");
+  }
+  return keplr.getOfflineSigner(chainId);
 }
 
 export function shortenWalletAddress(address: string): string {
