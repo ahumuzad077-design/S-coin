@@ -223,3 +223,190 @@ export async function waitForEvmTransactionReceipt(
   }
   throw new Error("Transaction is still pending. Keep the hash and check the explorer later.");
 }
+
+
+export interface Erc20TransferRequest {
+  chainId: string;
+  from: string;
+  to: string;
+  tokenAddress: string;
+  amount: string;
+}
+
+export interface Erc20TransferPreview extends Erc20TransferRequest {
+  decimals: number;
+  amountBaseUnits: string;
+  tokenBalance: string;
+  nativeBalance: string;
+  gasLimitHex: string;
+  gasPriceHex: string;
+  estimatedGasFee: string;
+}
+
+function parseTokenAmount(amount: string, decimals: number): bigint {
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) {
+    throw new Error("The token contract returned unsupported decimal precision.");
+  }
+  const normalized = amount.trim();
+  const pattern = decimals === 0
+    ? /^(?:0|[1-9]\d{0,77})$/
+    : new RegExp("^(?:0|[1-9]\\d{0,77})(?:\\.\\d{1," + decimals + "})?$");
+  if (!pattern.test(normalized)) {
+    throw new Error("Enter a positive token amount using no more than " + decimals + " decimal places.");
+  }
+  const [wholePart, fractionPart = ""] = normalized.split(".");
+  const scale = 10n ** BigInt(decimals);
+  const fraction = BigInt((fractionPart + "0".repeat(decimals)).slice(0, decimals) || "0");
+  const value = BigInt(wholePart) * scale + fraction;
+  if (value <= 0n) {
+    throw new Error("The token transfer amount must be greater than zero.");
+  }
+  if (value >= 1n << 256n) {
+    throw new Error("The token transfer amount is too large.");
+  }
+  return value;
+}
+
+function decodeUint256(value: unknown, label: string): bigint {
+  if (typeof value !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(value)) {
+    throw new Error("The token contract returned an invalid " + label + ".");
+  }
+  return BigInt(value);
+}
+
+function encodeAddressWord(address: string): string {
+  validateAddress(address, "recipient");
+  return address.slice(2).toLowerCase().padStart(64, "0");
+}
+
+function encodeUint256Word(value: bigint): string {
+  const encoded = value.toString(16);
+  if (encoded.length > 64) throw new Error("Token amount exceeds uint256.");
+  return encoded.padStart(64, "0");
+}
+
+/**
+ * Prepares a standard ERC-20 transfer. It verifies that the token address has
+ * contract code, reads decimals and balanceOf from that contract, estimates
+ * the native gas fee, and rechecks the active wallet account/network. A token
+ * address is still user-supplied and must be independently verified.
+ */
+export async function createErc20TransferPreview(
+  provider: Eip1193TransferProvider,
+  request: Erc20TransferRequest,
+): Promise<Erc20TransferPreview> {
+  validateAddress(request.from, "sender");
+  validateAddress(request.to, "recipient");
+  validateAddress(request.tokenAddress, "token contract");
+  if (request.from.toLowerCase() === request.to.toLowerCase()) {
+    throw new Error("Sender and recipient addresses must be different.");
+  }
+  if (request.to.toLowerCase() === "0x0000000000000000000000000000000000000000") {
+    throw new Error("The zero address cannot be used as a token recipient.");
+  }
+
+  await assertConnectedAccount(provider, request);
+  const code = await provider.request({
+    method: "eth_getCode",
+    params: [request.tokenAddress, "latest"],
+  });
+  if (typeof code !== "string" || !/^0x[0-9a-fA-F]*$/.test(code) || code === "0x" || /^0x0+$/.test(code)) {
+    throw new Error("The token address does not contain a deployed contract.");
+  }
+
+  const [decimalsResult, balanceResult] = await Promise.all([
+    provider.request({
+      method: "eth_call",
+      params: [{ to: request.tokenAddress, data: "0x313ce567" }, "latest"],
+    }),
+    provider.request({
+      method: "eth_call",
+      params: [{
+        to: request.tokenAddress,
+        data: "0x70a08231" + encodeAddressWord(request.from),
+      }, "latest"],
+    }),
+  ]);
+
+  const decimalsValue = decodeUint256(decimalsResult, "decimals");
+  if (decimalsValue > 36n) {
+    throw new Error("The token contract returned unsupported decimal precision.");
+  }
+  const decimals = Number(decimalsValue);
+  const tokenBalance = decodeUint256(balanceResult, "token balance");
+  const amountBaseUnits = parseTokenAmount(request.amount, decimals);
+  if (tokenBalance < amountBaseUnits) {
+    throw new Error("Insufficient token balance for this transfer.");
+  }
+
+  const transferData = "0xa9059cbb" +
+    encodeAddressWord(request.to) +
+    encodeUint256Word(amountBaseUnits);
+  const transaction = {
+    from: request.from,
+    to: request.tokenAddress,
+    value: "0x0",
+    data: transferData,
+  };
+
+  const [nativeBalanceValue, gasLimitValue, gasPriceValue] = await Promise.all([
+    provider.request({
+      method: "eth_getBalance",
+      params: [request.from, "latest"],
+    }),
+    provider.request({
+      method: "eth_estimateGas",
+      params: [transaction],
+    }),
+    provider.request({ method: "eth_gasPrice" }),
+  ]);
+
+  const nativeBalance = parseHexQuantity(nativeBalanceValue, "native balance");
+  const gasLimit = parseHexQuantity(gasLimitValue, "estimated gas limit");
+  const gasPrice = parseHexQuantity(gasPriceValue, "gas price");
+  if (gasLimit <= 0n || gasPrice <= 0n) {
+    throw new Error("The connected network returned an unusable gas estimate.");
+  }
+  const estimatedFee = gasLimit * gasPrice;
+  if (nativeBalance < estimatedFee) {
+    throw new Error(
+      "Insufficient native balance for the estimated network fee of " +
+      formatWei(estimatedFee) + ".",
+    );
+  }
+
+  return {
+    ...request,
+    decimals,
+    amountBaseUnits: amountBaseUnits.toString(),
+    tokenBalance: formatWei(tokenBalance * WEI / (10n ** BigInt(decimals))),
+    nativeBalance: formatWei(nativeBalance),
+    gasLimitHex: "0x" + gasLimit.toString(16),
+    gasPriceHex: "0x" + gasPrice.toString(16),
+    estimatedGasFee: formatWei(estimatedFee),
+  };
+}
+
+export async function submitErc20Transfer(
+  provider: Eip1193TransferProvider,
+  preview: Erc20TransferPreview,
+): Promise<string> {
+  const refreshed = await createErc20TransferPreview(provider, preview);
+  const hash = await provider.request({
+    method: "eth_sendTransaction",
+    params: [{
+      from: refreshed.from,
+      to: refreshed.tokenAddress,
+      value: "0x0",
+      data: "0xa9059cbb" +
+        encodeAddressWord(refreshed.to) +
+        encodeUint256Word(BigInt(refreshed.amountBaseUnits)),
+      gas: refreshed.gasLimitHex,
+      gasPrice: refreshed.gasPriceHex,
+    }],
+  });
+  if (typeof hash !== "string" || !/^0x[a-fA-F0-9]{64}$/.test(hash)) {
+    throw new Error("The wallet did not return a valid transaction hash.");
+  }
+  return hash;
+}
