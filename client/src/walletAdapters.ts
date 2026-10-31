@@ -8,6 +8,8 @@ export interface WalletConnection {
   name: string;
   address: string;
   chainId: string;
+  nativeBalance?: string;
+  nativeSymbol?: string;
 }
 
 interface EvmProvider {
@@ -39,6 +41,52 @@ const defaultEvmNetworks: Record<string, string> = {
   "0x2105": "https://base-rpc.publicnode.com",
   "0x38": "https://bsc-rpc.publicnode.com",
 };
+
+const evmNativeSymbols: Record<string, string> = {
+  "0x1": "ETH",
+  "0xaa36a7": "ETH",
+  "0x89": "POL",
+  "0xa": "ETH",
+  "0xa4b1": "ETH",
+  "0x2105": "ETH",
+  "0x38": "BNB",
+};
+
+function formatEvmNativeBalance(rawBalance: string): string {
+  if (!/^0x[0-9a-fA-F]+$/.test(rawBalance)) {
+    throw new Error("The EVM network returned an invalid native balance.");
+  }
+  const units = BigInt(rawBalance);
+  const scale = 10n ** 18n;
+  const whole = units / scale;
+  const fraction = ((units % scale) / 10n ** 10n)
+    .toString()
+    .padStart(8, "0")
+    .replace(/0+$/, "");
+  return fraction ? whole.toString() + "." + fraction : whole.toString();
+}
+
+async function readEvmNativeBalance(
+  provider: EvmProvider,
+  address: string,
+  chainId: string,
+): Promise<{ nativeBalance?: string; nativeSymbol: string }> {
+  const nativeSymbol = evmNativeSymbols[chainId.toLowerCase()] ?? "NATIVE";
+  try {
+    const result = await provider.request({
+      method: "eth_getBalance",
+      params: [address, "latest"],
+    });
+    if (typeof result !== "string") return { nativeSymbol };
+    return {
+      nativeBalance: formatEvmNativeBalance(result),
+      nativeSymbol,
+    };
+  } catch {
+    // Wallet permission/network issues should not prevent the address connection.
+    return { nativeSymbol };
+  }
+}
 
 function getSupportedEvmNetworks(): Record<string, string> {
   const configured = process.env.EXPO_PUBLIC_METAMASK_SUPPORTED_NETWORKS_JSON;
@@ -211,12 +259,19 @@ export async function connectEvmWallet(): Promise<WalletConnection> {
     }
 
     nativeMetaMaskClient = client;
-    activeEvmProvider = client.getProvider() as unknown as EvmProvider;
+    const provider = client.getProvider() as unknown as EvmProvider;
+    activeEvmProvider = provider;
+    const nativeBalance = await readEvmNativeBalance(
+      provider,
+      result.accounts[0],
+      result.chainId,
+    );
     return {
       kind: "evm",
       name: "MetaMask Connect",
       address: result.accounts[0],
       chainId: result.chainId,
+      ...nativeBalance,
     };
   }
 
@@ -236,11 +291,13 @@ export async function connectEvmWallet(): Promise<WalletConnection> {
   }
 
   activeEvmProvider = provider;
+  const nativeBalance = await readEvmNativeBalance(provider, accounts[0], rawChainId);
   return {
     kind: "evm",
     name,
     address: accounts[0],
     chainId: rawChainId,
+    ...nativeBalance,
   };
 }
 
