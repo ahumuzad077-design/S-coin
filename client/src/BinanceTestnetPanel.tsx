@@ -23,6 +23,7 @@ import {
   clearBinanceTestnetCredentials,
   loadBinanceTestnetCredentials,
   saveBinanceTestnetCredentials,
+  type BinanceTestnetCredentials,
 } from "./binanceCredentialStore";
 
 interface BinanceTestnetPanelProps {
@@ -63,16 +64,21 @@ export function BinanceTestnetPanel({ selectedMarket = "BTCUSDT" }: BinanceTestn
     setSymbol(selectedMarket.toUpperCase());
   }, [selectedMarket]);
 
-  const refreshAccount = useCallback(async () => {
+  const refreshAccount = useCallback(async (providedCredentials?: BinanceTestnetCredentials) => {
+    const activeCredentials = providedCredentials ?? credentials;
+    if (!activeCredentials) {
+      setError("Connect a Binance Spot Testnet API key first.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
-      const nextAccount = await getBinanceTestnetAccount();
+      const nextAccount = await getBinanceTestnetAccount(activeCredentials);
       setAccount(nextAccount);
       setConnected(true);
       const [orders, history] = await Promise.all([
-        getBinanceTestnetOpenOrders(symbol.trim() || undefined),
-        symbol.trim() ? getBinanceTestnetOrderHistory(symbol.trim()) : Promise.resolve([]),
+        getBinanceTestnetOpenOrders(symbol.trim() || undefined, activeCredentials),
+        symbol.trim() ? getBinanceTestnetOrderHistory(symbol.trim(), activeCredentials) : Promise.resolve([]),
       ]);
       setOpenOrders(orders);
       setOrderHistory(history.slice(-10).reverse());
@@ -85,15 +91,16 @@ export function BinanceTestnetPanel({ selectedMarket = "BTCUSDT" }: BinanceTestn
     } finally {
       setLoading(false);
     }
-  }, [symbol]);
+  }, [symbol, credentials]);
 
   useEffect(() => {
     let active = true;
     void loadBinanceTestnetCredentials()
       .then((credentials) => {
         if (active && credentials) {
+          setCredentials(credentials);
           setConnected(true);
-          void refreshAccount();
+          void refreshAccount(credentials);
         }
       })
       .catch((storageError) => {
@@ -120,15 +127,17 @@ export function BinanceTestnetPanel({ selectedMarket = "BTCUSDT" }: BinanceTestn
     setError("");
     setNotice("");
     try {
-      await saveBinanceTestnetCredentials({ apiKey, apiSecret });
+      const nextCredentials = { apiKey, apiSecret };
+      await saveBinanceTestnetCredentials(nextCredentials);
+      setCredentials(nextCredentials);
       setApiKey("");
       setApiSecret("");
       setConnected(true);
-      const nextAccount = await getBinanceTestnetAccount();
+      const nextAccount = await getBinanceTestnetAccount(nextCredentials);
       setAccount(nextAccount);
       const [orders, history] = await Promise.all([
-        getBinanceTestnetOpenOrders(symbol.trim() || undefined),
-        symbol.trim() ? getBinanceTestnetOrderHistory(symbol.trim()) : Promise.resolve([]),
+        getBinanceTestnetOpenOrders(symbol.trim() || undefined, nextCredentials),
+        symbol.trim() ? getBinanceTestnetOrderHistory(symbol.trim(), nextCredentials) : Promise.resolve([]),
       ]);
       setOpenOrders(orders);
       setOrderHistory(history.slice(-10).reverse());
@@ -148,6 +157,7 @@ export function BinanceTestnetPanel({ selectedMarket = "BTCUSDT" }: BinanceTestn
     setLoading(true);
     try {
       await clearBinanceTestnetCredentials();
+      setCredentials(null);
       setConnected(false);
       setAccount(null);
       setOpenOrders([]);
@@ -179,7 +189,8 @@ export function BinanceTestnetPanel({ selectedMarket = "BTCUSDT" }: BinanceTestn
     setLastOrder(null);
     try {
       const order = currentOrder();
-      const result = await validateBinanceTestnetOrder(order);
+      if (!credentials) throw new Error("Connect a Binance Spot Testnet API key first.");
+      const result = await validateBinanceTestnetOrder(order, credentials);
       if (!result.accepted) throw new Error(result.message);
       setValidatedOrder(order);
       setNotice("Order test passed. No order has been placed. Review the order and submit it separately.");
@@ -199,15 +210,16 @@ export function BinanceTestnetPanel({ selectedMarket = "BTCUSDT" }: BinanceTestn
     setError("");
     setNotice("");
     try {
+      if (!credentials) throw new Error("Connect a Binance Spot Testnet API key first.");
       if (!validatedOrder) throw new Error("Test the order first and review its parameters.");
-      const order = await placeBinanceTestnetOrder(validatedOrder);
+      const order = await placeBinanceTestnetOrder(validatedOrder, credentials);
       setLastOrder(order);
       setValidatedOrder(null);
       setNotice("Simulated Spot Testnet order submitted. No production funds were used.");
       const [nextAccount, nextOrders, history] = await Promise.all([
-        getBinanceTestnetAccount(),
-        getBinanceTestnetOpenOrders(symbol.trim()),
-        getBinanceTestnetOrderHistory(symbol.trim()),
+        getBinanceTestnetAccount(credentials),
+        getBinanceTestnetOpenOrders(symbol.trim(), credentials),
+        getBinanceTestnetOrderHistory(symbol.trim(), credentials),
       ]);
       setAccount(nextAccount);
       setOpenOrders(nextOrders);
@@ -227,12 +239,13 @@ export function BinanceTestnetPanel({ selectedMarket = "BTCUSDT" }: BinanceTestn
     setLoading(true);
     setError("");
     try {
+      if (!credentials) throw new Error("Connect a Binance Spot Testnet API key first.");
       if (pendingCancel === null) throw new Error("Select an open order to cancel.");
-      await cancelBinanceTestnetOrder(symbol.trim(), pendingCancel);
+      await cancelBinanceTestnetOrder(symbol.trim(), pendingCancel, credentials);
       setPendingCancel(null);
       setNotice("Testnet cancellation request submitted.");
-      setOpenOrders(await getBinanceTestnetOpenOrders(symbol.trim()));
-      setOrderHistory((await getBinanceTestnetOrderHistory(symbol.trim())).slice(-10).reverse());
+      setOpenOrders(await getBinanceTestnetOpenOrders(symbol.trim(), credentials));
+      setOrderHistory((await getBinanceTestnetOrderHistory(symbol.trim(), credentials)).slice(-10).reverse());
     } catch (requestError) {
       setError(
         requestError instanceof Error
