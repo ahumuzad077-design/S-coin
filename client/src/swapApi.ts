@@ -15,7 +15,10 @@ export interface EvmSwapQuote {
   buyAmount?: string;
   minBuyAmount?: string;
   allowanceTarget?: string;
+  taker?: string;
+  liquidityAvailable?: boolean;
   issues?: {
+    simulationIncomplete?: boolean;
     allowance?: {
       spender?: string;
       actual?: string;
