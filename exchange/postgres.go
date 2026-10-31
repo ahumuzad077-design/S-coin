@@ -88,34 +88,36 @@ func (s *PostgresStore) CreateIssuerApplication(ctx context.Context, principal P
 	if err != nil { return IssuerApplication{}, err }
 	defer tx.Rollback()
 
+	if strings.TrimSpace(principal.OrganizationID) == "" {
+		return IssuerApplication{}, ErrForbidden
+	}
 	var organisationID string
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO exchange_organisations
 			(legal_name, registration_country, registration_number, registered_address, website)
 		VALUES ($1,$2,$3,$4,$5)
+		ON CONFLICT (registration_country, registration_number)
+		DO UPDATE SET updated_at = now()
+		WHERE lower(trim(exchange_organisations.legal_name)) = lower(trim(EXCLUDED.legal_name))
 		RETURNING id::text`,
 		strings.TrimSpace(input.LegalName), strings.ToUpper(strings.TrimSpace(input.RegistrationCountry)),
 		strings.TrimSpace(input.RegistrationNumber), strings.TrimSpace(input.RegisteredAddress),
 		strings.TrimSpace(input.Website)).Scan(&organisationID)
-	if err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "unique") || strings.Contains(strings.ToLower(err.Error()), "duplicate") {
-			return IssuerApplication{}, ErrConflict
-		}
-		return IssuerApplication{}, err
-	}
+	if errors.Is(err, sql.ErrNoRows) { return IssuerApplication{}, ErrConflict }
+	if err != nil { return IssuerApplication{}, err }
 
 	var applicationID string
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO exchange_issuer_applications
-			(organisation_id, applicant_subject, applicant_email, applicant_phone,
-			 proposed_security_type, proposed_market_segment, business_description,
-			 capital_seeking_minor, currency)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+			(organisation_id, applicant_subject, applicant_organization_id,
+			 applicant_email, applicant_phone, proposed_security_type,
+			 proposed_market_segment, business_description, capital_seeking_minor, currency)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
 		RETURNING id::text`,
-		organisationID, principal.Subject, strings.TrimSpace(input.ApplicantEmail),
-		strings.TrimSpace(input.ApplicantPhone), input.ProposedSecurityType,
-		input.ProposedMarketSegment, strings.TrimSpace(input.BusinessDescription),
-		input.CapitalSeekingMinor, input.Currency).Scan(&applicationID)
+		organisationID, principal.Subject, principal.OrganizationID,
+		strings.TrimSpace(input.ApplicantEmail), strings.TrimSpace(input.ApplicantPhone),
+		input.ProposedSecurityType, input.ProposedMarketSegment,
+		strings.TrimSpace(input.BusinessDescription), input.CapitalSeekingMinor, input.Currency).Scan(&applicationID)
 	if err != nil { return IssuerApplication{}, err }
 
 	if _, err := tx.ExecContext(ctx, `
@@ -139,7 +141,7 @@ const applicationSelect = `
 SELECT a.id::text, o.legal_name, o.verification_status, o.registration_country, o.registration_number,
        o.registered_address, o.website, a.applicant_email, a.applicant_phone,
        a.proposed_security_type, a.proposed_market_segment, a.business_description,
-       a.capital_seeking_minor, a.currency, a.status, a.applicant_subject,
+       a.capital_seeking_minor, a.currency, a.status, a.applicant_subject, a.applicant_organization_id,
        COALESCE(a.assigned_to_subject,''), a.created_at, a.updated_at
 FROM exchange_issuer_applications a
 JOIN exchange_organisations o ON o.id = a.organisation_id`
@@ -151,7 +153,7 @@ func scanApplication(row scanner) (IssuerApplication, error) {
 	err := row.Scan(&a.ID, &a.LegalName, &a.OrganisationVerificationStatus, &a.RegistrationCountry, &a.RegistrationNumber,
 		&a.RegisteredAddress, &a.Website, &a.ApplicantEmail, &a.ApplicantPhone,
 		&a.ProposedSecurityType, &a.ProposedMarketSegment, &a.BusinessDescription,
-		&a.CapitalSeekingMinor, &a.Currency, &a.Status, &a.SubmittedBy,
+		&a.CapitalSeekingMinor, &a.Currency, &a.Status, &a.SubmittedBy, &a.ApplicantOrganisationID,
 		&a.AssignedTo, &a.CreatedAt, &a.UpdatedAt)
 	return a, err
 }
