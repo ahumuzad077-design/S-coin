@@ -7,12 +7,14 @@ on:
       - ".github/workflows/client.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
 
   dependency-lockfile-tidy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Check out pull-request branch
         uses: actions/checkout@v4
@@ -52,9 +54,21 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add go.mod go.sum client/package-lock.json
           git commit -m "chore(deps): synchronize Go and npm lockfiles [skip ci]"
-          git push origin "HEAD:${PR_HEAD_REF}"
+          # The feature branch may receive commits while this repair job runs.
+          # Rebase this dependency-only commit onto the latest branch head
+          # before pushing so concurrent client work is not lost.
+          for attempt in 1 2 3; do
+            git fetch origin "${PR_HEAD_REF}"
+            git rebase "origin/${PR_HEAD_REF}"
+            if git push origin "HEAD:${PR_HEAD_REF}"; then
+              exit 0
+            fi
+          done
+          echo "Could not publish dependency metadata after three rebases."
+          exit 1
 
   typecheck-and-web-export:
+    needs: dependency-lockfile-tidy
     runs-on: ubuntu-latest
     defaults:
       run:
