@@ -171,3 +171,28 @@ phone. iOS native builds require macOS or a configured remote build service.
 
 Use only a trusted node endpoint. This app is a development client; it has not
 been security audited and is not suitable for managing real funds.
+
+## Markets and wallet connection hub (feature branch)
+
+The feature branch `feat/scoin-wallet-markets` adds a Markets screen to the Expo
+client. It reads public Binance Spot market data for selected USDT pairs and
+supports browser-injected MetaMask-compatible EVM account connections and
+Keplr connections for a preconfigured S Coin Cosmos chain.
+
+Run the existing app as described above, then open **Markets** in the app
+navigation. No new package installation is required for this initial browser
+integration. Set `EXPO_PUBLIC_SCOIN_CHAIN_ID` to the exact trusted S Coin chain
+ID when one has been established; do not guess or reuse a local test chain ID
+for production.
+
+This is an early connection and market-data stage, not a full wallet or
+exchange. It does not generate or store recovery phrases, sign transactions,
+send funds, place Binance orders, process deposits/withdrawals, or execute
+crypto swaps. Browser extension connections are supported in web builds;
+native mobile wallet pairing still needs a WalletConnect / MetaMask Connect
+integration. The swap panel is an indicative conversion preview only.
+
+See [wallet and exchange integration notes](./docs/wallet-and-exchange-integration.md)
+for the architecture, security boundary, regulatory readiness and next stages.
+Do not use this client to manage real funds; independent security review and
+production readiness gates remain outstanding.
