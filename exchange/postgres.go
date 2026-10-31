@@ -118,15 +118,22 @@ func (s *PostgresStore) CreateIssuerApplication(ctx context.Context, principal P
 	var applicationID string
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO exchange_issuer_applications
-			(organisation_id, applicant_subject, applicant_organization_id,
-			 applicant_email, applicant_phone, proposed_security_type,
-			 proposed_market_segment, business_description, capital_seeking_minor, currency)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+			(organisation_id, submitted_legal_name, submitted_registration_country,
+			 submitted_registration_number, submitted_registered_address, submitted_website,
+			 applicant_subject, applicant_organization_id, applicant_email, applicant_phone,
+			 proposed_security_type, proposed_market_segment, business_description,
+			 capital_seeking_minor, currency)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 		RETURNING id::text`,
-		organisationID, principal.Subject, principal.OrganizationID,
+		organisationID, strings.TrimSpace(input.LegalName),
+		strings.ToUpper(strings.TrimSpace(input.RegistrationCountry)),
+		strings.ToUpper(strings.TrimSpace(input.RegistrationNumber)),
+		strings.TrimSpace(input.RegisteredAddress), strings.TrimSpace(input.Website),
+		principal.Subject, principal.OrganizationID,
 		strings.TrimSpace(input.ApplicantEmail), strings.TrimSpace(input.ApplicantPhone),
 		input.ProposedSecurityType, input.ProposedMarketSegment,
-		strings.TrimSpace(input.BusinessDescription), input.CapitalSeekingMinor, input.Currency).Scan(&applicationID)
+		strings.TrimSpace(input.BusinessDescription), input.CapitalSeekingMinor,
+		input.Currency).Scan(&applicationID)
 	if err != nil { return IssuerApplication{}, err }
 
 	if _, err := tx.ExecContext(ctx, `
@@ -147,8 +154,8 @@ func (s *PostgresStore) CreateIssuerApplication(ctx context.Context, principal P
 }
 
 const applicationSelect = `
-SELECT a.id::text, o.legal_name, o.verification_status, o.registration_country, o.registration_number,
-       o.registered_address, o.website, a.applicant_email, a.applicant_phone,
+SELECT a.id::text, a.submitted_legal_name, o.verification_status, a.submitted_registration_country, a.submitted_registration_number,
+       a.submitted_registered_address, a.submitted_website, a.applicant_email, a.applicant_phone,
        a.proposed_security_type, a.proposed_market_segment, a.business_description,
        a.capital_seeking_minor, a.currency, a.status, a.applicant_subject, a.applicant_organization_id,
        COALESCE(a.assigned_to_subject,''), a.created_at, a.updated_at
