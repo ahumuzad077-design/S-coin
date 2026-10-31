@@ -299,7 +299,7 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
       if (!evmWallet) throw new Error("Connect MetaMask before preparing a transfer.");
       const enabledChains = (process.env.EXPO_PUBLIC_EVM_TRANSFER_CHAIN_IDS ?? "0xaa36a7")
         .split(",")
-        .map((value) => value.trim().toLowerCase())
+        .map((value: string) => value.trim().toLowerCase())
         .filter(Boolean);
       if (!enabledChains.includes(evmWallet.chainId.toLowerCase())) {
         throw new Error(
@@ -331,7 +331,7 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
       }
       const enabledChains = (process.env.EXPO_PUBLIC_EVM_TRANSFER_CHAIN_IDS ?? "0xaa36a7")
         .split(",")
-        .map((value) => value.trim().toLowerCase())
+        .map((value: string) => value.trim().toLowerCase())
         .filter(Boolean);
       if (!enabledChains.includes(evmWallet.chainId.toLowerCase())) {
         throw new Error("Native transfers are disabled on this network.");
