@@ -96,11 +96,10 @@ export function BinanceTestnetPanel({ selectedMarket = "BTCUSDT" }: BinanceTestn
   useEffect(() => {
     let active = true;
     void loadBinanceTestnetCredentials()
-      .then((credentials) => {
-        if (active && credentials) {
-          setCredentials(credentials);
+      .then((savedCredentials) => {
+        if (active && savedCredentials) {
+          setCredentials(savedCredentials);
           setConnected(true);
-          void refreshAccount(credentials);
         }
       })
       .catch((storageError) => {
@@ -113,7 +112,13 @@ export function BinanceTestnetPanel({ selectedMarket = "BTCUSDT" }: BinanceTestn
     return () => {
       active = false;
     };
-  }, [refreshAccount]);
+  }, []);
+
+  useEffect(() => {
+    if (connected && credentials) {
+      void refreshAccount(credentials);
+    }
+  }, [connected, credentials, symbol, refreshAccount]);
 
   const nonZeroBalances = useMemo(
     () => (account?.balances ?? []).filter(
