@@ -927,6 +927,7 @@ const styles = StyleSheet.create({
   watchlistFilterText: { color: palette.muted, fontSize: 9, fontWeight: "700" },
   watchlistFilterTextActive: { color: palette.accent },
   marketCountRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 5 },
+  tableLabel: { color: palette.muted, fontSize: 8, fontWeight: "800", letterSpacing: 0.7 },
   favoriteButton: { paddingHorizontal: 6, paddingVertical: 8 },
   favoriteGlyph: { color: palette.muted, fontSize: 14 },
   favoriteGlyphActive: { color: palette.accent },
