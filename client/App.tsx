@@ -17,7 +17,7 @@ import {
   Platform,
   useWindowDimensions,
 } from "react-native";
-import { ExchangeHub } from "./src/ExchangeHub";
+import { useRouter } from "expo-router";
 import {
   AccountTransaction,
   ChainStatus,
@@ -31,7 +31,7 @@ import {
   shorten,
 } from "./src/chain";
 
-type Screen = "overview" | "wallet" | "exchange" | "explorer" | "validators" | "settings";
+type Screen = "overview" | "wallet" | "explorer" | "validators" | "settings";
 
 const initialApiUrl =
   process.env.EXPO_PUBLIC_SCOIN_API_URL ??
@@ -43,12 +43,12 @@ const initialApiUrl =
 const navigation: { id: Screen; label: string; glyph: string }[] = [
   { id: "overview", label: "Overview", glyph: "◈" },
   { id: "wallet", label: "Wallet", glyph: "▣" },
-  { id: "exchange", label: "Markets", glyph: "↗" },
   { id: "explorer", label: "Explorer", glyph: "⌕" },
   { id: "validators", label: "Validators", glyph: "⌘" },
 ];
 
 export default function App() {
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const compact = width < 760;
   const [screen, setScreen] = useState<Screen>("overview");
@@ -169,13 +169,11 @@ export default function App() {
       ? "Your network at a glance"
       : screen === "wallet"
         ? "Read-only wallet"
-        : screen === "exchange"
-          ? "Markets & wallet"
-          : screen === "explorer"
-            ? "Network explorer"
-            : screen === "validators"
-              ? "Validator set"
-              : "Connection settings";
+        : screen === "explorer"
+          ? "Network explorer"
+          : screen === "validators"
+            ? "Validator set"
+            : "Connection settings";
 
   return (
     <View style={styles.app}>
@@ -205,6 +203,13 @@ export default function App() {
                   onPress={() => setScreen(item.id)}
                 />
               ))}
+              <NavButton
+                compact={false}
+                active={false}
+                label="Markets"
+                glyph="↗"
+                onPress={() => router.push("/markets")}
+              />
             </View>
           )}
           {!compact && (
@@ -296,13 +301,6 @@ export default function App() {
                 onSubmit={() => void loadAccount()}
               />
             )}
-            {screen === "exchange" && (
-              <ExchangeHub
-                compact={compact}
-                apiUrl={apiUrl}
-                chainId={process.env.EXPO_PUBLIC_SCOIN_CHAIN_ID ?? chain?.chainId ?? ""}
-              />
-            )}
             {screen === "explorer" && (
               <Explorer compact={compact} chain={chain} loading={loadingNetwork} />
             )}
@@ -346,6 +344,13 @@ export default function App() {
                   onPress={() => setScreen(item.id)}
                 />
               ))}
+              <NavButton
+                compact
+                active={false}
+                label="Markets"
+                glyph="↗"
+                onPress={() => router.push("/markets")}
+              />
             </View>
           )}
         </View>
