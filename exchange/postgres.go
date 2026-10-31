@@ -24,6 +24,7 @@ type Store interface {
 	ListIssuerApplications(context.Context, string, int) ([]IssuerApplication, error)
 	ListApplicationEvents(context.Context, string) ([]ApplicationEvent, error)
 	DecideIssuerApplication(context.Context, Principal, string, ReviewDecisionInput, string) (IssuerApplication, error)
+	VerifyOrganisationRegistration(context.Context, Principal, string, CompanyVerificationInput, string) (IssuerApplication, error)
 	GetExchangeStatus(context.Context, string) (ExchangeStatus, error)
 	Close() error
 }
@@ -197,6 +198,57 @@ func (s *PostgresStore) ListApplicationEvents(ctx context.Context, applicationID
 		result = append(result, e)
 	}
 	return result, rows.Err()
+}
+
+func (s *PostgresStore) VerifyOrganisationRegistration(ctx context.Context, principal Principal, applicationID string, input CompanyVerificationInput, requestID string) (IssuerApplication, error) {
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil { return IssuerApplication{}, err }
+	defer tx.Rollback()
+
+	var organisationID, current string
+	err = tx.QueryRowContext(ctx, `
+		SELECT o.id::text, o.verification_status
+		FROM exchange_issuer_applications a
+		JOIN exchange_organisations o ON o.id = a.organisation_id
+		WHERE a.id = $1
+		FOR UPDATE OF o`, applicationID).Scan(&organisationID, &current)
+	if errors.Is(err, sql.ErrNoRows) { return IssuerApplication{}, ErrNotFound }
+	if err != nil { return IssuerApplication{}, err }
+	if current != "PENDING_VERIFICATION" { return IssuerApplication{}, ErrConflict }
+
+	role := "EXCHANGE_COMPLIANCE"
+	if principal.HasRole("EXCHANGE_ADMIN") { role = "EXCHANGE_ADMIN" }
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE exchange_organisations
+		SET verification_status = $2,
+		    registration_evidence_reference = $3,
+		    registration_verified_by_subject = $4,
+		    registration_verified_at = now(),
+		    updated_at = now()
+		WHERE id = $1`,
+		organisationID, input.Decision, strings.TrimSpace(input.RegistryEvidenceURL), principal.Subject); err != nil {
+		return IssuerApplication{}, err
+	}
+	eventType := "COMPANY_REGISTRATION_" + input.Decision
+	reason := strings.TrimSpace(input.Reason) + " | Registry evidence: " + strings.TrimSpace(input.RegistryEvidenceURL)
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO exchange_issuer_application_events
+			(application_id, actor_subject, actor_role, event_type, reason)
+		VALUES ($1,$2,$3,$4,$5)`,
+		applicationID, principal.Subject, role, eventType, reason); err != nil {
+		return IssuerApplication{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO exchange_audit_events
+			(actor_subject, actor_role, event_type, resource_type, resource_id, request_id)
+		VALUES ($1,$2,$3,'ISSUER_APPLICATION',$4,$5)`,
+		principal.Subject, role, eventType, applicationID, requestID); err != nil {
+		return IssuerApplication{}, err
+	}
+	result, err := scanApplication(tx.QueryRowContext(ctx, applicationSelect+" WHERE a.id = $1", applicationID))
+	if err != nil { return IssuerApplication{}, err }
+	if err := tx.Commit(); err != nil { return IssuerApplication{}, err }
+	return result, nil
 }
 
 func (s *PostgresStore) DecideIssuerApplication(ctx context.Context, principal Principal, applicationID string, decision ReviewDecisionInput, requestID string) (IssuerApplication, error) {
