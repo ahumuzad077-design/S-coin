@@ -1,0 +1,31 @@
+vue/node_modules
+vue/dist
+release/
+.idea/
+.vscode/
+.DS_Store
+*.dot
+*.log
+*.ign
+.testnets/
+
+# dependencies and generated output
+node_modules/
+dist/
+build/
+coverage/
+.expo/
+*.tsbuildinfo
+
+# credentials and local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+*.jks
+*.keystore
+/client/.claude/settings.json

@@ -1,0 +1,24 @@
+version: 1
+validation: sovereign
+default_denom: uscoin
+accounts: 
+- name: alice
+  coins:
+  - 200000000uscoin
+- name: bob
+  coins:
+  - 100000000uscoin
+client:
+  openapi:
+    path: docs/static/openapi.json
+faucet:
+  name: bob
+  coins:
+  - 100000uscoin
+validators:
+- name: alice
+  bonded: 100000000uscoin
+- name: validator1
+  bonded: 200000000uscoin
+- name: validator2
+  bonded: 100000000uscoin
