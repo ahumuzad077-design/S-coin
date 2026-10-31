@@ -5,8 +5,8 @@ This is the first **real operating subsystem** for the proposed MERIDIAN securit
 ## What this service does
 
 - Accepts an authenticated company representative's issuer application.
-- Requires a valid OIDC identity token and an identity-provider-verified email.
-- Records the company's legal name, registration jurisdiction and registration number.
+- Requires a valid OIDC identity token, an identity-provider-verified email, and a signed `organization_id` tenant claim.
+- Records the company's legal name, registration jurisdiction, registration number, registered address and website as a per-application submission snapshot, separately from the canonical company record.
 - Stores the proposed security type, market segment, business description, amount sought and currency.
 - Allows an authorised exchange reviewer to start review, request information, progress to due diligence or decline an application.
 - Allows an exchange compliance officer to verify or reject company registration against an HTTPS registry evidence reference; the reviewer identity, evidence URL and timestamp are recorded.
