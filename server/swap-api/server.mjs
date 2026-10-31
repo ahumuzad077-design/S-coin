@@ -403,7 +403,16 @@ export function createSwapApiServer(env = process.env, fetchImpl = fetch) {
           pickedQuote.sellToken?.toLowerCase() === quoteRequest.sellToken.toLowerCase() &&
           pickedQuote.buyToken?.toLowerCase() === quoteRequest.buyToken.toLowerCase() &&
           pickedQuote.sellAmount === quoteRequest.sellAmount &&
-          pickedQuote.liquidityAvailable === true
+          pickedQuote.liquidityAvailable === true &&
+          pickedQuote.issues?.simulationIncomplete !== true &&
+          (!pickedQuote.issues?.allowance?.spender ||
+            !pickedQuote.allowanceTarget ||
+            pickedQuote.issues.allowance.spender.toLowerCase() === pickedQuote.allowanceTarget.toLowerCase()) &&
+          typeof pickedQuote.buyAmount === "string" &&
+          /^[1-9]\\d{0,77}$/.test(pickedQuote.buyAmount) &&
+          typeof pickedQuote.minBuyAmount === "string" &&
+          /^[1-9]\\d{0,77}$/.test(pickedQuote.minBuyAmount) &&
+          BigInt(pickedQuote.minBuyAmount) <= BigInt(pickedQuote.buyAmount)
         );
         json(response, 200, {
           provider: "0x",
