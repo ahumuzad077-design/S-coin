@@ -65,7 +65,7 @@ func BenchmarkSimulation(b *testing.B) {
 	simcli.FlagSeedValue = time.Now().Unix()
 	simcli.FlagVerboseValue = true
 	simcli.FlagCommitValue = true
-	simcli.FlagEnabledValue = true
+	simcli.FlagEnabledValue //nolint:staticcheck // SetupSimulation still accepts the legacy flag for compatibility. = true
 
 	config := simcli.NewConfigFromFlags()
 	config.ChainID = SimAppChainID
@@ -364,15 +364,15 @@ func TestAppSimulationAfterImport(t *testing.T) {
 }
 
 func TestAppStateDeterminism(t *testing.T) {
-	if !simcli.FlagEnabledValue {
+	if !simcli.FlagEnabledValue { //nolint:staticcheck // Retain the current opt-in gate for expensive full-app simulations.
 		t.Skip("skipping application simulation")
 	}
 
 	config := simcli.NewConfigFromFlags()
 	config.InitialBlockHeight = 1
 	config.ExportParamsPath = ""
-	config.OnOperation = true
-	config.AllInvariants = true
+	config.OnOperation = true //nolint:staticcheck // Keep legacy simulation config until the SDK removes these unused options.
+	config.AllInvariants = true //nolint:staticcheck // Keep legacy simulation config until the SDK removes these unused options.
 	config.ChainID = SimAppChainID
 
 	numSeeds := 3
