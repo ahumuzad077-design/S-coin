@@ -173,9 +173,9 @@ export default function App() {
           ? "Markets & wallet"
           : screen === "explorer"
             ? "Network explorer"
-          : screen === "validators"
-            ? "Validator set"
-            : "Connection settings";
+            : screen === "validators"
+              ? "Validator set"
+              : "Connection settings";
 
   return (
     <View style={styles.app}>
