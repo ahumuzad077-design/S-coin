@@ -15,6 +15,27 @@ const marketSymbols = [
   "XRPUSDT",
   "ADAUSDT",
   "DOGEUSDT",
+  "TRXUSDT",
+  "LINKUSDT",
+  "AVAXUSDT",
+  "LTCUSDT",
+  "BCHUSDT",
+  "DOTUSDT",
+  "UNIUSDT",
+  "NEARUSDT",
+  "SUIUSDT",
+  "TONUSDT",
+  "ATOMUSDT",
+  "XLMUSDT",
+  "ETCUSDT",
+  "SHIBUSDT",
+  "AAVEUSDT",
+  "FILUSDT",
+  "APTUSDT",
+  "ARBUSDT",
+  "OPUSDT",
+  "INJUSDT",
+  "SEIUSDT",
   "USDCUSDT",
 ];
 
@@ -119,4 +140,169 @@ export function formatMarketPercent(value: string): string {
   const change = Number(value);
   if (!Number.isFinite(change)) return "—";
   return (change > 0 ? "+" : "") + change.toFixed(2) + "%";
+}
+
+
+export type BinanceStreamStatus = "connecting" | "live" | "reconnecting";
+
+interface BinanceStreamTicker {
+  s?: unknown;
+  c?: unknown;
+  P?: unknown;
+  q?: unknown;
+  h?: unknown;
+  l?: unknown;
+}
+
+/**
+ * Opens an official public Binance market-data WebSocket stream.
+ * This stream is read-only and never authenticates or touches exchange accounts.
+ * A single connection is intentionally recycled before Binance's 24-hour limit.
+ */
+export function subscribeBinanceTickers(
+  onTickers: (tickers: BinanceTicker[]) => void,
+  onStatus: (status: BinanceStreamStatus) => void,
+): () => void {
+  let stopped = false;
+  let socket: WebSocket | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let recycleTimer: ReturnType<typeof setTimeout> | null = null;
+  let reconnectAttempt = 0;
+  const latest = new Map<string, BinanceTicker>();
+  const streams = marketSymbols.map((symbol) => symbol.toLowerCase() + "@ticker");
+  const streamUrl =
+    "wss://data-stream.binance.vision/stream?streams=" +
+    streams.join("/");
+
+  const clearTimers = () => {
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    if (recycleTimer) clearTimeout(recycleTimer);
+    reconnectTimer = null;
+    recycleTimer = null;
+  };
+
+  const closeSocket = () => {
+    if (!socket) return;
+    const current = socket;
+    socket = null;
+    current.onopen = null;
+    current.onmessage = null;
+    current.onerror = null;
+    current.onclose = null;
+    try {
+      current.close();
+    } catch {
+      // A closed or failed socket needs no further action.
+    }
+  };
+
+  const scheduleReconnect = () => {
+    if (stopped || reconnectTimer) return;
+    onStatus("reconnecting");
+    const delay = Math.min(30_000, 1_000 * 2 ** Math.min(reconnectAttempt, 5));
+    reconnectAttempt += 1;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, delay);
+  };
+
+  const connect = () => {
+    if (stopped) return;
+    onStatus(reconnectAttempt === 0 ? "connecting" : "reconnecting");
+
+    try {
+      const nextSocket = new WebSocket(streamUrl);
+      socket = nextSocket;
+
+      nextSocket.onopen = () => {
+        if (stopped || socket !== nextSocket) return;
+        reconnectAttempt = 0;
+        onStatus("live");
+
+        // Binance stream connections are limited to 24 hours.
+        recycleTimer = setTimeout(() => {
+          if (socket !== nextSocket) return;
+          closeSocket();
+          scheduleReconnect();
+        }, 23 * 60 * 60 * 1000);
+      };
+
+      nextSocket.onmessage = (event) => {
+        if (stopped || socket !== nextSocket) return;
+        try {
+          const parsed: unknown = JSON.parse(String(event.data));
+          if (typeof parsed !== "object" || parsed === null) return;
+          const envelope = parsed as { data?: unknown };
+          const payload = (envelope.data ?? parsed) as unknown;
+          if (typeof payload !== "object" || payload === null) return;
+
+          const row = payload as BinanceStreamTicker;
+          if (
+            typeof row.s !== "string" ||
+            typeof row.c !== "string" ||
+            typeof row.P !== "string" ||
+            typeof row.q !== "string" ||
+            typeof row.h !== "string" ||
+            typeof row.l !== "string"
+          ) {
+            return;
+          }
+
+          const ticker: BinanceTicker = {
+            symbol: row.s,
+            lastPrice: row.c,
+            priceChangePercent: row.P,
+            quoteVolume: row.q,
+            highPrice: row.h,
+            lowPrice: row.l,
+          };
+
+          if (
+            !marketSymbols.includes(ticker.symbol) ||
+            !Number.isFinite(Number(ticker.lastPrice)) ||
+            !Number.isFinite(Number(ticker.priceChangePercent)) ||
+            !Number.isFinite(Number(ticker.quoteVolume)) ||
+            !Number.isFinite(Number(ticker.highPrice)) ||
+            !Number.isFinite(Number(ticker.lowPrice))
+          ) {
+            return;
+          }
+
+          latest.set(ticker.symbol, ticker);
+          onTickers(
+            Array.from(latest.values()).sort(
+              (left, right) =>
+                Number(right.quoteVolume) - Number(left.quoteVolume),
+            ),
+          );
+        } catch {
+          // Ignore malformed messages; the REST snapshot remains available.
+        }
+      };
+
+      nextSocket.onerror = () => {
+        if (stopped || socket !== nextSocket) return;
+        closeSocket();
+        scheduleReconnect();
+      };
+
+      nextSocket.onclose = () => {
+        if (stopped || socket !== nextSocket) return;
+        socket = null;
+        clearTimers();
+        scheduleReconnect();
+      };
+    } catch {
+      scheduleReconnect();
+    }
+  };
+
+  connect();
+
+  return () => {
+    stopped = true;
+    clearTimers();
+    closeSocket();
+  };
 }
