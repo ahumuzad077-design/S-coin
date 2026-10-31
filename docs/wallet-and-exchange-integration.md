@@ -189,12 +189,14 @@ HTTPS, monitoring and abuse controls.
   approval. This is not an independent S Coin self-custody wallet.
 - ERC-20 token sends are supported only through an explicit external-wallet
   transfer prompt on configured EVM networks (Sepolia by default).
-- No token allowance/approval workflow, EVM swap signing or execution,
-  cross-chain transaction broadcast, recovery or refund workflow.
-- No Skip Go /msgs generation/signing/broadcast. A route preview is not an
-  IBC transaction.
-- No authenticated Binance account balances, user-data streams, orders,
-  trading, deposits, withdrawals, margin, futures, lending or custody.
+- EVM swap approval and signing are implemented through the connected external
+  wallet only when both server and client chain/contract allowlists are enabled.
+  The default configuration is off; this is not a production exchange launch.
+- No Skip Go /msgs generation/signing/broadcast, cross-chain recovery or refund
+  workflow. A route preview is not an IBC transaction.
+- No production Binance account balances, user-data streams, orders, deposits,
+  withdrawals, margin, futures, lending or custody. The separate Spot Testnet
+  desk uses simulated accounts and orders only.
 - No fiat, bank, mobile-money, payment, reserve-management, issuance or
   redemption rails.
 - No supported S Coin-to-other-coin route. S Coin is not verified as a
@@ -215,8 +217,9 @@ An executable swap requires more than a route response:
 5. Show final transaction details and ask the user to sign in their own
    wallet. S Coin must not collect a recovery phrase or wallet private key.
 6. Track transaction receipts and provide safe failure, timeout and
-   cross-chain recovery procedures. Native EVM transfers use this wallet-
-   approval pattern; the more complex swap execution sequence remains disabled.
+   cross-chain recovery procedures. The app tracks native transfers, token
+   approvals, ERC-20 sends and EVM swap receipts. Cross-chain recovery remains
+   outside this release.
 
 0x supports EVM quotes and transaction calldata on supported networks. Skip Go
 can return routing information for supported Cosmos/IBC and EVM routes. Neither
@@ -270,13 +273,13 @@ Before customer funds or fiat rails are enabled:
 2. Add native Cosmos signing, fee estimation, simulation and transaction
    monitoring using a maintained Cosmos wallet library.
 3. Add native Keplr/Cosmos wallet pairing.
-4. Add EVM token approvals, simulation, wallet signing and receipt monitoring
-   only after independent review.
+4. Complete an independent security audit and test end-to-end flows with
+   dedicated testnet accounts before any production use.
 5. Verify S Coin chain/provider support, liquidity and IBC routes before
    enabling its native asset for swaps.
-6. Add Binance authenticated Spot Testnet account/order integration only if
-   there is a confirmed business need; production trading requires separate
-   legal, operational and security approval.
+6. Keep production Binance credentials, trading, deposits and withdrawals
+   outside this integration until separate legal, operational and security
+   approval exists. The isolated Spot Testnet desk is already implemented.
 
 
 ## Binance Spot Testnet trading desk
