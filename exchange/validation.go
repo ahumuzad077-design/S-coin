@@ -69,6 +69,20 @@ func validText(value string, min, max int) bool {
 	return n >= min && n <= max
 }
 
+func ValidateCompanyVerification(input CompanyVerificationInput) error {
+	if input.Decision != "VERIFIED" && input.Decision != "REJECTED" {
+		return ErrInvalidInput
+	}
+	if !validText(input.Reason, 10, 4000) {
+		return ErrInvalidInput
+	}
+	u, err := url.ParseRequestURI(strings.TrimSpace(input.RegistryEvidenceURL))
+	if err != nil || u.Scheme != "https" || u.Host == "" {
+		return ErrInvalidInput
+	}
+	return nil
+}
+
 func ValidateReviewDecision(input ReviewDecisionInput) error {
 	if !validText(input.Reason, 10, 4000) {
 		return ErrInvalidInput
