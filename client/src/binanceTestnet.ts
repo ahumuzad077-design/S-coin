@@ -202,7 +202,8 @@ export async function getBinanceTestnetAccount(
       .filter((balance) =>
         typeof balance.asset === "string" &&
         /^\d+(?:\.\d+)?$/.test(balance.free) &&
-        /^\d+(?:\.\d+)?$/.test(balance.locked),
+        /^\d+(?:\.\d+)?$/.test(balance.locked) &&
+        (Number(balance.free) > 0 || Number(balance.locked) > 0),
       )
       .sort((left, right) => Number(right.free) + Number(right.locked) - Number(left.free) - Number(left.locked)),
   };
