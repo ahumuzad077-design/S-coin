@@ -24,6 +24,7 @@ import {
   type BinanceMarketDetails,
   type BinanceStreamStatus,
 } from "./marketData";
+import { BinanceTestnetPanel } from "./BinanceTestnetPanel";
 import {
   WalletConnection,
   connectEvmWallet,
