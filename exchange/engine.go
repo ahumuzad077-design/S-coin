@@ -174,7 +174,7 @@ func (e *Engine) Security(symbol string) (Security, error) {
 
 func (e *Engine) Summary() MarketSummary {
 	securities := e.Securities()
-	return MarketSummary{Code: DemoExchangeCode, Name: "Meridian East Africa Exchange — Demo Market", Region: "East Africa", Currency: DefaultCurrency, Status: "CLOSED_DEMO", Mode: SimulationMode, SecurityCount: len(securities), Securities: securities, InvestorAccount: DemoAccountID}
+	return MarketSummary{Code: DemoExchangeCode, Name: "Meridian East Africa Exchange — Demo Market", Region: "East Africa", Currency: DefaultCurrency, Status: "SIMULATION_ONLY", Mode: SimulationMode, SecurityCount: len(securities), Securities: securities, InvestorAccount: DemoAccountID}
 }
 
 func (e *Engine) PlaceLimitOrder(accountID, symbol string, side OrderSide, quantity, limitPrice int64) (Order, []Fill, error) {
