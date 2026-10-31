@@ -174,9 +174,21 @@ export async function requestEvmSwapQuote(
       throw new Error("The swap service returned a quote that does not match this wallet request or contains invalid fields.");
     }
 
-    const allowanceSpender = quote.issues?.allowance?.spender ?? quote.allowanceTarget;
-    if (allowanceSpender !== undefined && !/^0x[a-fA-F0-9]{40}$/.test(allowanceSpender)) {
+    const allowanceTargets = [
+      quote.issues?.allowance?.spender,
+      quote.allowanceTarget,
+    ].filter((target) => target !== undefined);
+    if (allowanceTargets.some(
+      (target) => typeof target !== "string" || !/^0x[a-fA-F0-9]{40}$/.test(target),
+    )) {
       throw new Error("The swap service returned an invalid token allowance target.");
+    }
+    if (
+      quote.issues?.allowance?.spender &&
+      quote.allowanceTarget &&
+      quote.issues.allowance.spender.toLowerCase() !== quote.allowanceTarget.toLowerCase()
+    ) {
+      throw new Error("The swap service returned conflicting token allowance targets.");
     }
 
     const responseQuote = payload as EvmSwapQuoteResponse;
