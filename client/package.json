@@ -32,7 +32,8 @@
     "proxy": "node proxy.mjs",
     "start:dev": "expo start --dev-client",
     "prebuild": "expo prebuild",
-    "test:wallet": "node --experimental-strip-types --test src/evmTransactions.test.mjs"
+    "test:wallet": "node --experimental-strip-types --test src/evmTransactions.test.mjs",
+    "test:binance": "node --experimental-strip-types --test src/binanceTestnet.test.mjs"
   },
   "private": true
 }
