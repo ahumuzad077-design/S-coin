@@ -31,7 +31,7 @@ func main() {
 		if err := store.RunMigrations(ctx); err != nil { log.Fatal(err) }
 		log.Print("MERIDIAN exchange operations database migration completed")
 	case "serve":
-		serve(ctx, store)
+		serve(context.Background(), store)
 	default:
 		log.Fatal("unknown command; use migrate or serve")
 	}
