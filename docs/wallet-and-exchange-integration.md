@@ -45,6 +45,12 @@ centralized exchange, broker, custodian or live swap service.
   checks the balance against amount plus estimated fee, validates the returned
   transaction hash, and polls for a transaction receipt. A fee estimate is not
   a guaranteed final network fee.
+- Standard ERC-20 transfers read contract code, token decimals and the connected
+  account's token balance, validate the requested amount, estimate native gas,
+  then request the external wallet to submit the token contract's `transfer`
+  call. The token contract address is user-supplied and must be verified by
+  the user; the transfer is restricted to the same configured EVM testnet
+  allowlist by default.
 
 ### Quote and route previews
 
@@ -181,8 +187,10 @@ HTTPS, monitoring and abuse controls.
 - Native EVM asset sending is limited to explicitly configured chain IDs
   (Sepolia only by default) and always requires the external wallet's explicit
   approval. This is not an independent S Coin self-custody wallet.
-- No ERC-20 token transfers, token allowance/approval flows, EVM swap signing
-  or execution, cross-chain transaction broadcast, recovery or refund workflow.
+- ERC-20 token sends are supported only through an explicit external-wallet
+  transfer prompt on configured EVM networks (Sepolia by default).
+- No token allowance/approval workflow, EVM swap signing or execution,
+  cross-chain transaction broadcast, recovery or refund workflow.
 - No Skip Go /msgs generation/signing/broadcast. A route preview is not an
   IBC transaction.
 - No authenticated Binance account balances, user-data streams, orders,
