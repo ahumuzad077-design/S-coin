@@ -35,6 +35,9 @@ jobs:
       - name: Test EVM transfer validation and wallet calls
         run: npm run test:wallet
 
+      - name: Test Binance Spot Testnet API signing and orders
+        run: npm run test:binance
+
       - name: TypeScript typecheck
         run: npx tsc --noEmit
 
