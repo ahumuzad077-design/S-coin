@@ -34,3 +34,9 @@ jobs:
 
       - name: Export web application
         run: npx expo export --platform web --output-dir dist-web
+
+      - name: Bundle Android native application
+        run: npx expo export --platform android --output-dir dist-android
+
+      - name: Bundle iOS native application
+        run: npx expo export --platform ios --output-dir dist-ios
