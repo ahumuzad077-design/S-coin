@@ -48,6 +48,7 @@ func NewHTTPHandler(store Store, auth Authenticator, legalName string) http.Hand
 		switch r.Method {
 		case http.MethodPost:
 			if !p.HasRole("ISSUER_APPLICANT") { writeError(w, http.StatusForbidden, "forbidden", "Issuer applicant access is required."); return }
+			if !p.EmailVerified || !strings.EqualFold(strings.TrimSpace(input.ApplicantEmail), strings.TrimSpace(p.Email)) { writeError(w, http.StatusUnprocessableEntity, "verified_email_required", "Use the email address verified by your identity provider."); return }
 			var input IssuerApplicationInput
 			if err := decodeJSON(w, r, &input, 64*1024); err != nil { writeError(w, http.StatusBadRequest, "invalid_json", "Provide one valid issuer application JSON object."); return }
 			if err := ValidateIssuerApplication(input); err != nil { writeError(w, http.StatusUnprocessableEntity, "invalid_application", "Check the required company registration, contact, security and capital-raising fields."); return }
