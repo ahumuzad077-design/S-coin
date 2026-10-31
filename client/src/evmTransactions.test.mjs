@@ -29,8 +29,6 @@ class MockWallet {
     this.tokenDecimals = overrides.tokenDecimals ?? 18;
     this.tokenBalance = overrides.tokenBalance ?? 5n * 10n ** 18n;
     this.contractCode = overrides.contractCode ?? "0x60006000";
-    this.tokenDecimals = overrides.tokenDecimals ?? 18;
-    this.tokenBalance = overrides.tokenBalance ?? 5n * 10n ** 18n;
     this.allowance = overrides.allowance ?? 0n;
     this.sent = [];
   }
@@ -47,8 +45,6 @@ class MockWallet {
         return this.gasLimit;
       case "eth_gasPrice":
         return this.gasPrice;
-      case "eth_getCode":
-        return this.contractCode;
       case "eth_getCode":
         return this.contractCode;
       case "eth_call": {
@@ -251,7 +247,7 @@ const swapQuote = () => ({
 });
 
 test("prepares an exact-amount ERC-20 allowance with gas preview", async () => {
-  const wallet = new MockWallet({ allowance: 0n });
+  const wallet = new MockWallet({ chainId: "0x1", allowance: 0n });
   const preview = await createErc20ApprovalPreview(wallet, {
     chainId: "0x1",
     from,
@@ -266,7 +262,7 @@ test("prepares an exact-amount ERC-20 allowance with gas preview", async () => {
 });
 
 test("skips ERC-20 approval when the allowance already covers the swap", async () => {
-  const wallet = new MockWallet({ allowance: 2n * 10n ** 18n });
+  const wallet = new MockWallet({ chainId: "0x1", allowance: 2n * 10n ** 18n });
   const preview = await createErc20ApprovalPreview(wallet, {
     chainId: "0x1",
     from,
@@ -280,7 +276,7 @@ test("skips ERC-20 approval when the allowance already covers the swap", async (
 });
 
 test("submits only the exact ERC-20 allowance through the connected wallet", async () => {
-  const wallet = new MockWallet({ allowance: 0n });
+  const wallet = new MockWallet({ chainId: "0x1", allowance: 0n });
   const preview = await createErc20ApprovalPreview(wallet, {
     chainId: "0x1",
     from,
@@ -300,7 +296,7 @@ test("submits only the exact ERC-20 allowance through the connected wallet", asy
 
 test("prepares a swap only with matching chain, taker, balance, allowance and contract allowlists", async () => {
   const amountIn = "1000000000000000000";
-  const wallet = new MockWallet({ allowance: 2n * 10n ** 18n });
+  const wallet = new MockWallet({ chainId: "0x1", allowance: 2n * 10n ** 18n });
   const preview = await createEvmSwapPreview(wallet, {
     chainId: "0x1",
     from,
@@ -318,7 +314,7 @@ test("prepares a swap only with matching chain, taker, balance, allowance and co
 });
 
 test("rejects a swap quote with a stale timestamp or a non-allowlisted target", async () => {
-  const wallet = new MockWallet({ allowance: 2n * 10n ** 18n });
+  const wallet = new MockWallet({ chainId: "0x1", allowance: 2n * 10n ** 18n });
   const quote = swapQuote();
   await assert.rejects(
     createEvmSwapPreview(wallet, {
@@ -345,7 +341,7 @@ test("rejects a swap quote with a stale timestamp or a non-allowlisted target", 
 });
 
 test("rejects swap execution when token allowance is insufficient", async () => {
-  const wallet = new MockWallet({ allowance: 1n });
+  const wallet = new MockWallet({ chainId: "0x1", allowance: 1n });
   await assert.rejects(
     createEvmSwapPreview(wallet, {
       chainId: "0x1",
@@ -360,7 +356,7 @@ test("rejects swap execution when token allowance is insufficient", async () => 
 });
 
 test("submits a fully revalidated swap only through the connected wallet", async () => {
-  const wallet = new MockWallet({ allowance: 2n * 10n ** 18n });
+  const wallet = new MockWallet({ chainId: "0x1", allowance: 2n * 10n ** 18n });
   const preview = await createEvmSwapPreview(wallet, {
     chainId: "0x1",
     from,
