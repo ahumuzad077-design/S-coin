@@ -65,12 +65,12 @@ func BenchmarkSimulation(b *testing.B) {
 	simcli.FlagSeedValue = time.Now().Unix()
 	simcli.FlagVerboseValue = true
 	simcli.FlagCommitValue = true
-	simcli.FlagEnabledValue //nolint:staticcheck // SetupSimulation still accepts the legacy flag for compatibility. = true
+	simcli.FlagEnabledValue = true //nolint:staticcheck // SetupSimulation still accepts the legacy flag for compatibility.
 
 	config := simcli.NewConfigFromFlags()
 	config.ChainID = SimAppChainID
 
-	db, dir, logger, skip, err := simtestutil.SetupSimulation(config, "leveldb-app-sim", "Simulation", simcli.FlagVerboseValue, simcli.FlagEnabledValue)
+	db, dir, logger, skip, err := simtestutil.SetupSimulation(config, "leveldb-app-sim", "Simulation", simcli.FlagVerboseValue, simcli.FlagEnabledValue) //nolint:staticcheck // The current SDK helper still requires this deprecated compatibility flag.
 	if skip {
 		b.Skip("skipping application simulation")
 	}
