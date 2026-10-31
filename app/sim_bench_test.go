@@ -23,7 +23,7 @@ func BenchmarkFullAppSimulation(b *testing.B) {
 	config := simcli.NewConfigFromFlags()
 	config.ChainID = SimAppChainID
 
-	db, dir, logger, skip, err := simtestutil.SetupSimulation(config, "goleveldb-app-sim", "Simulation", simcli.FlagVerboseValue, simcli.FlagEnabledValue, //nolint:staticcheck // SetupSimulation still accepts the legacy benchmark gate.)
+	db, dir, logger, skip, err := simtestutil.SetupSimulation(config, "goleveldb-app-sim", "Simulation", simcli.FlagVerboseValue, simcli.FlagEnabledValue) //nolint:staticcheck // SetupSimulation still accepts the legacy benchmark gate.
 	if err != nil {
 		b.Fatalf("simulation setup failed: %s", err.Error())
 	}
