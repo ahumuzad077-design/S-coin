@@ -36,8 +36,9 @@ export interface EvmSwapQuote {
 export interface EvmSwapQuoteResponse {
   provider: "0x";
   quote: EvmSwapQuote;
-  executionEnabled: false;
+  executionEnabled: boolean;
   notice: string;
+  receivedAt?: number;
 }
 
 export function parseTokenUnits(value: string, decimals: number): string {
@@ -150,7 +151,8 @@ export async function requestEvmSwapQuote(
       throw new Error("The swap service returned an incomplete or invalid transaction quote.");
     }
 
-    return payload as EvmSwapQuoteResponse;
+    const responseQuote = payload as EvmSwapQuoteResponse;
+    return { ...responseQuote, receivedAt: Date.now() };
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error("The swap quote request timed out.");
