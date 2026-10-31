@@ -217,3 +217,8 @@ remain future work. S Coin has no verified production network or registered
 DEX/IBC swap route yet. See
 [`docs/wallet-and-exchange-integration.md`](./docs/wallet-and-exchange-integration.md)
 and [`server/swap-api/README.md`](./server/swap-api/README.md).
+
+The market screen now discovers active Binance Spot markets quoted in USDT from
+Binance exchange metadata, ranks them by 24-hour quote volume, and supports
+search across the full discovered set. It shows the top 100 by default and
+updates from Binance's public all-market 24-hour ticker WebSocket stream.
