@@ -7,7 +7,7 @@ on:
       - ".github/workflows/client.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   typecheck-and-web-export:
@@ -28,24 +28,6 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: client/package-lock.json
-
-      - name: Regenerate package lock from declared dependencies
-        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-
-      - name: Commit lockfile repair for this repository branch
-        if: github.event.pull_request.head.repo.full_name == github.repository
-        env:
-          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        run: |
-          if git diff --quiet -- package-lock.json; then
-            echo "package-lock.json is already synchronized."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "chore(client): synchronize npm lockfile [skip ci]"
-          git push origin "HEAD:${PR_HEAD_REF}"
 
       - name: Install locked dependencies
         run: npm ci
