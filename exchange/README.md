@@ -10,7 +10,7 @@ This is the first **real operating subsystem** for the proposed MERIDIAN securit
 - Stores the proposed security type, market segment, business description, amount sought and currency.
 - Allows an authorised exchange reviewer to start review, request information, progress to due diligence or decline an application.
 - Allows an exchange compliance officer to verify or reject company registration against an HTTPS registry evidence reference; the reviewer identity, evidence URL and timestamp are recorded.
-- Restricts applicants to their own records and restricts application queues/decisions to exchange staff roles.
+- Restricts applicants to their own company records using the signed `organization_id` tenant claim, and restricts application queues/decisions to exchange staff roles.
 - Writes application status events and audit events in the same database transaction as each decision.
 - Protects application-event and audit-event rows against update/delete at the database trigger level.
 - Reports whether a securities-exchange authorisation has been recorded, without enabling trading.
