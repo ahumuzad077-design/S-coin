@@ -33,7 +33,8 @@
     "start:dev": "expo start --dev-client",
     "prebuild": "expo prebuild",
     "test:wallet": "node --experimental-strip-types --test src/evmTransactions.test.mjs",
-    "test:binance": "node --experimental-strip-types --test src/binanceTestnet.test.mjs"
+    "test:binance": "node --experimental-strip-types --test src/binanceTestnet.test.mjs",
+    "test:swap": "node --experimental-strip-types --test src/swapApi.test.mjs"
   },
   "private": true
 }
