@@ -299,6 +299,7 @@ export default function App() {
             {screen === "exchange" && (
               <ExchangeHub
                 compact={compact}
+                apiUrl={apiUrl}
                 chainId={process.env.EXPO_PUBLIC_SCOIN_CHAIN_ID ?? chain?.chainId ?? ""}
               />
             )}
