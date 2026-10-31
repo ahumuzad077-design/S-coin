@@ -25,6 +25,7 @@ import {
   type BinanceStreamStatus,
 } from "./marketData";
 import { BinanceTestnetPanel } from "./BinanceTestnetPanel";
+import { CosmosTransferPanel } from "./CosmosTransferPanel";
 import {
   WalletConnection,
   connectEvmWallet,
@@ -1092,6 +1093,15 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
 
         <View style={styles.rightColumn}>
           <BinanceTestnetPanel selectedMarket={selectedSymbol} />
+          <CosmosTransferPanel
+            chainId={chainId}
+            wallet={scoinWallet}
+            onTransferComplete={async () => {
+              if (scoinWallet) {
+                setScoinBalances(await getAccountBalances(apiUrl, scoinWallet.address));
+              }
+            }}
+          />
           <View style={styles.panel}>
             <Text style={styles.eyebrow}>NON-CUSTODIAL CONNECTIONS</Text>
             <Text style={styles.panelTitle}>Connect a wallet</Text>
