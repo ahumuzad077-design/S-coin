@@ -25,7 +25,9 @@ import {
   WalletConnection,
   connectEvmWallet,
   connectScoinWallet,
+  getErc20TokenDecimals,
   shortenWalletAddress,
+  subscribeEvmWalletChanges,
 } from "./walletAdapters";
 import {
   formatTokenUnits,
@@ -102,6 +104,15 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
       setStreamStatus,
     );
   }, [refreshMarkets]);
+
+  useEffect(() => {
+    if (!evmWallet) return undefined;
+    return subscribeEvmWalletChanges(() => {
+      setEvmWallet(null);
+      setEvmQuote(null);
+      setQuoteError("Your EVM wallet account or network changed. Reconnect and request a fresh quote.");
+    });
+  }, [evmWallet]);
 
   const filteredTickers = useMemo(() => {
     const query = searchTerm.trim().toUpperCase();
@@ -195,6 +206,26 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
       );
     } finally {
       setCosmosRouteLoading(false);
+    }
+  };
+
+  const detectTokenDecimals = async (
+    tokenAddress: string,
+    setDecimals: (value: string) => void,
+    label: string,
+  ) => {
+    setQuoteError("");
+    setEvmQuote(null);
+    try {
+      if (!evmWallet) {
+        throw new Error("Connect an EVM wallet before reading token metadata.");
+      }
+      const decimals = await getErc20TokenDecimals(tokenAddress.trim(), evmWallet.chainId);
+      setDecimals(String(decimals));
+    } catch (error) {
+      setQuoteError(
+        error instanceof Error ? error.message : "Could not read " + label + " decimals.",
+      );
     }
   };
 
@@ -575,6 +606,14 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
               style={styles.quoteInput}
               value={sellToken}
             />
+            <Pressable
+              accessibilityRole="button"
+              disabled={!evmWallet || !sellToken.trim()}
+              onPress={() => void detectTokenDecimals(sellToken, setSellDecimals, "sell token")}
+              style={[styles.detectButton, (!evmWallet || !sellToken.trim()) && styles.disabled]}
+            >
+              <Text style={styles.detectButtonText}>Read sell token decimals from contract</Text>
+            </Pressable>
             <Text style={styles.fieldLabel}>BUY TOKEN CONTRACT</Text>
             <TextInput
               accessibilityLabel="Buy token contract address"
@@ -586,6 +625,14 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
               style={styles.quoteInput}
               value={buyToken}
             />
+            <Pressable
+              accessibilityRole="button"
+              disabled={!evmWallet || !buyToken.trim()}
+              onPress={() => void detectTokenDecimals(buyToken, setBuyDecimals, "buy token")}
+              style={[styles.detectButton, (!evmWallet || !buyToken.trim()) && styles.disabled]}
+            >
+              <Text style={styles.detectButtonText}>Read buy token decimals from contract</Text>
+            </Pressable>
             <View style={styles.quoteAmountRow}>
               <View style={styles.quoteAmountColumn}>
                 <Text style={styles.fieldLabel}>SELL AMOUNT</Text>
@@ -1021,6 +1068,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   quoteDivider: { height: 1, backgroundColor: palette.border, marginVertical: 17 },
+  detectButton: { minHeight: 32, alignSelf: "flex-start", paddingHorizontal: 9, justifyContent: "center", borderRadius: 7, borderWidth: 1, borderColor: palette.border, marginTop: 7 },
+  detectButtonText: { color: palette.accent, fontSize: 8, fontWeight: "700" },
   quoteInput: { minHeight: 40, borderRadius: 8, borderWidth: 1, borderColor: "#33413E", backgroundColor: "#0B1111", color: palette.ink, paddingHorizontal: 10, fontSize: 10 },
   quoteAmountRow: { flexDirection: "row", gap: 8 },
   quoteAmountColumn: { flex: 1, minWidth: 0 },
