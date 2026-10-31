@@ -15,6 +15,7 @@ var (
 	ErrForbidden         = errors.New("not authorised")
 	ErrConflict          = errors.New("record conflict")
 	ErrInvalidTransition = errors.New("invalid status transition")
+	ErrPrerequisiteNotMet = errors.New("required company verification is not complete")
 )
 
 var registrationNumberPattern = regexp.MustCompile("^[A-Za-z0-9][A-Za-z0-9./-]{1,63}$")
