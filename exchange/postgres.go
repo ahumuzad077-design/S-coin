@@ -242,7 +242,12 @@ func highestReviewRole(p Principal) string {
 }
 
 func (s *PostgresStore) GetExchangeStatus(ctx context.Context, legalName string) (ExchangeStatus, error) {
-	status := ExchangeStatus{OperatorName: legalName, RegulatoryApprovalStatus: "NOT_RECORDED", TradingEnabled: false, Reason: "No verified securities-exchange approval is recorded. Trading is not enabled."}
+	status := ExchangeStatus{
+		OperatorName: legalName,
+		RegulatoryApprovalStatus: "NOT_RECORDED",
+		TradingEnabled: false,
+		Reason: "No verified securities-exchange approval is recorded. Trading is not enabled.",
+	}
 	err := s.db.QueryRowContext(ctx, `
 		SELECT reference_number, status
 		FROM exchange_regulatory_authorisations
@@ -251,16 +256,22 @@ func (s *PostgresStore) GetExchangeStatus(ctx context.Context, legalName string)
 		LIMIT 1`).Scan(&status.ApprovalReference, &status.RegulatoryApprovalStatus)
 	if errors.Is(err, sql.ErrNoRows) { return status, nil }
 	if err != nil { return ExchangeStatus{}, err }
-	if status.RegulatoryApprovalStatus == "VERIFIED" {
-		var valid bool
-		err := s.db.QueryRowContext(ctx, `
-			SELECT (effective_at <= now() AND (expires_at IS NULL OR expires_at > now()))
-			FROM exchange_regulatory_authorisations
-			WHERE authorisation_type='SECURITIES_EXCHANGE' AND reference_number=$1`,
-			status.ApprovalReference).Scan(&valid)
-		if err != nil { return ExchangeStatus{}, err }
-		status.TradingEnabled = valid
-		if valid { status.Reason = "A verified authorisation is recorded. Separate operational readiness checks and regulator launch approval are still required." }
-	}
+	status.TradingEnabled = false
+	status.Reason = "Regulatory authorisation records are informational only. This service has no live trading engine or launch permission; trading remains disabled."
 	return status, nil
+}
+
+
+func (s *PostgresStore) CheckSchema(ctx context.Context) error {
+	var checksum string
+	if err := s.db.QueryRowContext(ctx, "SELECT checksum FROM exchange_schema_migrations WHERE version = 1").Scan(&checksum); err != nil {
+		return fmt.Errorf("exchange database schema is not migrated: %w", err)
+	}
+	raw, err := migrations.ReadFile("migrations/0001_exchange_operations.sql")
+	if err != nil { return err }
+	sum := sha256.Sum256(raw)
+	if checksum != hex.EncodeToString(sum[:]) {
+		return errors.New("exchange database migration checksum mismatch")
+	}
+	return nil
 }
