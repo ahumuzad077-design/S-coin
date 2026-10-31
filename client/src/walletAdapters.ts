@@ -245,7 +245,7 @@ export async function connectEvmWallet(): Promise<WalletConnection> {
   if (Platform.OS !== "web") {
     const client = await getNativeMetaMaskClient();
     const result = await client.connect({
-      chainIds: Object.keys(getSupportedEvmNetworks()),
+      chainIds: Object.keys(getSupportedEvmNetworks()) as `0x${string}`[],
     });
 
     if (
