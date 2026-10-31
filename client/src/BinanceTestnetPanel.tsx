@@ -45,6 +45,7 @@ export function BinanceTestnetPanel({ selectedMarket = "BTCUSDT" }: BinanceTestn
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
   const [connected, setConnected] = useState(false);
+  const [credentials, setCredentials] = useState<BinanceTestnetCredentials | null>(null);
   const [account, setAccount] = useState<BinanceTestnetAccount | null>(null);
   const [openOrders, setOpenOrders] = useState<BinanceTestnetOpenOrder[]>([]);
   const [orderHistory, setOrderHistory] = useState<BinanceTestnetOrder[]>([]);
