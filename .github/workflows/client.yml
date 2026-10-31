@@ -25,6 +25,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
 
       - name: Set up Node
         uses: actions/setup-node@v5
@@ -46,7 +48,7 @@ jobs:
         run: npx expo export --platform web --output-dir dist-web
 
   commit-client-lockfile:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feat/scoin-wallet-markets'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/feat/scoin-wallet-markets') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feat/scoin-wallet-markets')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -70,5 +72,5 @@ jobs:
           git add client/package-lock.json
           if ! git diff --cached --quiet; then
             git commit -m "chore(client): update npm lockfile"
-            git push origin HEAD:${GITHUB_REF_NAME}
+            git push origin HEAD:${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}
           fi
