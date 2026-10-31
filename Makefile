@@ -41,7 +41,7 @@ bench:
 	@echo Running unit tests with benchmarking...
 	@go test -mod=readonly -v -timeout 30m -bench=. ./...
 
-test: govet test-unit govulncheck
+test: govet test-unit
 
 .PHONY: test test-unit test-race test-cover bench
 
@@ -101,4 +101,8 @@ govulncheck:
 	@echo Running govulncheck...
 	@go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
-.PHONY: govet govulncheck
+# Security scanning is intentionally separate from deterministic unit tests.
+# It can fail when an upstream transitive dependency has no available fix.
+security: govulncheck
+
+.PHONY: govet govulncheck security
