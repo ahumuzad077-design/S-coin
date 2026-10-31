@@ -326,3 +326,29 @@ EXPO_PUBLIC_EVM_SWAP_TARGETS_JSON. Keep these unset/off until independent
 security review and explicit operational approval. The quote service must also
 sit behind real session authentication and a production-grade distributed
 limiter/WAF; CORS and an in-memory IP limiter are not authentication.
+
+
+## Native S Coin transfers through Keplr (web)
+
+The web client now contains a Keplr/CosmJS native S Coin send flow. It checks
+that Keplr controls the displayed `scoin1` account, connects to a separate
+CometBFT RPC endpoint, verifies the exact chain ID against the configured
+value, reads the `uscoin` balance, simulates a bank `MsgSend`, calculates an
+estimated fee from the configured gas price, and only then asks Keplr to sign
+and broadcast the transaction. The client verifies the transaction result
+and refreshes the displayed balance after confirmation.
+
+This feature is deliberately **disabled by default**. Enable it only after the
+chain operator supplies a verified RPC endpoint and the approved fee policy.
+Configure:
+
+- `EXPO_PUBLIC_SCOIN_COSMOS_SEND_ENABLED=true` only after explicit operator approval.
+- `EXPO_PUBLIC_SCOIN_CHAIN_ID` with the exact live/test chain ID.
+- `EXPO_PUBLIC_SCOIN_RPC_URL` with a trusted HTTPS CometBFT RPC endpoint.
+- `EXPO_PUBLIC_SCOIN_GAS_PRICE` with the actual network fee price in the
+  native fee denom, e.g. `0.025uscoin` only if the operator confirms that value.
+
+The app does not invent a gas price, chain ID or RPC. On Android/iOS, Keplr
+mobile session pairing has not been configured, so native S Coin transfers
+remain unavailable in native builds. This path is not audited for production
+funds and should first be tested against an operator-controlled test network.
