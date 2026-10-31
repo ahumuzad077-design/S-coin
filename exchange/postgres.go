@@ -135,7 +135,7 @@ func (s *PostgresStore) CreateIssuerApplication(ctx context.Context, principal P
 }
 
 const applicationSelect = `
-SELECT a.id::text, o.legal_name, o.registration_country, o.registration_number,
+SELECT a.id::text, o.legal_name, o.verification_status, o.registration_country, o.registration_number,
        o.registered_address, o.website, a.applicant_email, a.applicant_phone,
        a.proposed_security_type, a.proposed_market_segment, a.business_description,
        a.capital_seeking_minor, a.currency, a.status, a.applicant_subject,
@@ -147,7 +147,7 @@ type scanner interface { Scan(...any) error }
 
 func scanApplication(row scanner) (IssuerApplication, error) {
 	var a IssuerApplication
-	err := row.Scan(&a.ID, &a.LegalName, &a.RegistrationCountry, &a.RegistrationNumber,
+	err := row.Scan(&a.ID, &a.LegalName, &a.OrganisationVerificationStatus, &a.RegistrationCountry, &a.RegistrationNumber,
 		&a.RegisteredAddress, &a.Website, &a.ApplicantEmail, &a.ApplicantPhone,
 		&a.ProposedSecurityType, &a.ProposedMarketSegment, &a.BusinessDescription,
 		&a.CapitalSeekingMinor, &a.Currency, &a.Status, &a.SubmittedBy,
