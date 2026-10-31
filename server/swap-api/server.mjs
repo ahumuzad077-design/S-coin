@@ -205,25 +205,40 @@ function pickEvmQuoteFields(payload) {
 }
 
 export function createSwapApiServer(env = process.env, fetchImpl = fetch) {
+  const configuredRateLimit = Number(env.SWAP_API_RATE_LIMIT ?? DEFAULT_RATE_LIMIT);
   const config = {
     zeroXApiKey: env.ZEROX_API_KEY ?? "",
     evmChainIds: new Set(csv(env.SWAP_ALLOWED_EVM_CHAIN_IDS)),
     cosmosChainIds: new Set(csv(env.SWAP_ALLOWED_COSMOS_CHAIN_IDS)),
     tokensByChain: tokenAllowlist(env.SWAP_ALLOWED_TOKENS_JSON ?? "{}"),
     allowedOrigins: new Set(csv(env.SWAP_API_ALLOWED_ORIGINS)),
-    rateLimit: Math.max(1, Number(env.SWAP_API_RATE_LIMIT ?? DEFAULT_RATE_LIMIT)),
+    rateLimit:
+      Number.isInteger(configuredRateLimit) && configuredRateLimit > 0
+        ? Math.min(configuredRateLimit, 1000)
+        : DEFAULT_RATE_LIMIT,
   };
 
   const rateBuckets = new Map();
+  const maxRateBuckets = 10_000;
 
   function isRateLimited(request) {
+    // Use the socket address. Do not trust arbitrary X-Forwarded-For headers;
+    // configure the reverse proxy to enforce its own client-IP rate limit.
     const ip = request.socket.remoteAddress ?? "unknown";
     const now = Date.now();
     const bucket = rateBuckets.get(ip);
+
     if (!bucket || now - bucket.start >= WINDOW_MS) {
+      if (!bucket && rateBuckets.size >= maxRateBuckets) {
+        for (const [key, value] of rateBuckets) {
+          if (now - value.start >= WINDOW_MS) rateBuckets.delete(key);
+        }
+        if (rateBuckets.size >= maxRateBuckets) return true;
+      }
       rateBuckets.set(ip, { start: now, count: 1 });
       return false;
     }
+
     bucket.count += 1;
     return bucket.count > config.rateLimit;
   }
