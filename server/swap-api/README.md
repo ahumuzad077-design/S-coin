@@ -1,7 +1,10 @@
 # S Coin quote service
 
-This service provides **quote and route previews only**. It does not sign,
-broadcast, custody, deposit, withdraw, or submit transactions.
+This service provides **quote and route previews by default**. A separately
+gated EVM execution capability may be returned only when the operator enables
+it and the 0x quote matches exact server-side chain, token, transaction-target
+and AllowanceHolder/Permit2 spender allowlists. The service itself never signs,
+broadcasts, or holds customer keys; an external wallet must approve each transaction.
 
 ## Run locally
 
@@ -51,8 +54,9 @@ not implemented here. Do not expose a quote response as a guaranteed fill.
   enabled; responses use no-store caching.
 - The server does not expose a generic URL proxy.
 - 0x and Skip errors are not reflected verbatim to clients.
-- No endpoints are provided to approve tokens, sign transactions, broadcast,
-  or initiate withdrawals.
+- The service has no endpoint to approve tokens, sign transactions, broadcast,
+  or initiate withdrawals. Transaction signing stays inside the user's
+  external wallet.
 - Put this service behind HTTPS and an edge rate limiter/WAF in production.
   Configure exact CORS origins and secrets via the hosting platform's secret
   manager. Do not commit a populated \`.env\` file.
