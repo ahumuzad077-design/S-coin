@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS exchange_issuer_applications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organisation_id UUID NOT NULL REFERENCES exchange_organisations(id),
     applicant_subject TEXT NOT NULL,
+    applicant_organization_id TEXT NOT NULL,
     applicant_email TEXT NOT NULL,
     applicant_phone TEXT NOT NULL,
     proposed_security_type TEXT NOT NULL
