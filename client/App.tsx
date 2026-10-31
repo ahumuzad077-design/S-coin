@@ -256,7 +256,7 @@ export default function App() {
             ]}
             keyboardShouldPersistTaps="handled"
           >
-            {error ? (
+            {error && screen !== "markets" ? (
               <View style={styles.errorBanner}>
                 <Text style={styles.errorTitle}>Connection needs attention</Text>
                 <Text style={styles.errorText}>{error}</Text>
