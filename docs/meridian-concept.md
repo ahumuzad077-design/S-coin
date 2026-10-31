@@ -4,7 +4,7 @@
 **Proposed first jurisdiction:** Uganda, subject to legal and regulatory feasibility  
 **Long-term geography:** East Africa → wider Africa → selected international markets  
 **Current status:** Pre-licensing concept and closed software simulation  
-**Repository implementation:** \`exchange/\` (Go simulation) and \`client/src/MarketScreen.tsx\` (Expo client)
+**Repository implementation:** `exchange/` (Go simulation) and `client/src/MarketScreen.tsx` (Expo client)
 
 ## 1. Company thesis
 
