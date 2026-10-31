@@ -27,6 +27,12 @@ import {
   connectScoinWallet,
   shortenWalletAddress,
 } from "./walletAdapters";
+import {
+  EvmSwapQuoteResponse,
+  formatTokenUnits,
+  parseTokenUnits,
+  requestEvmSwapQuote,
+} from "./swapApi";
 
 interface ExchangeHubProps {
   chainId: string;
@@ -46,6 +52,14 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
   const [walletError, setWalletError] = useState("");
   const [amount, setAmount] = useState("1");
   const [selectedSymbol, setSelectedSymbol] = useState("BTCUSDT");
+  const [sellToken, setSellToken] = useState("");
+  const [buyToken, setBuyToken] = useState("");
+  const [sellAmount, setSellAmount] = useState("1");
+  const [sellDecimals, setSellDecimals] = useState("18");
+  const [buyDecimals, setBuyDecimals] = useState("18");
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState("");
+  const [evmQuote, setEvmQuote] = useState<EvmSwapQuoteResponse | null>(null);
 
   const refreshMarkets = useCallback(async () => {
     setRefreshing(true);
@@ -146,6 +160,45 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
   };
 
   const browserWalletsAvailable = Platform.OS === "web";
+  const swapApiBaseUrl = process.env.EXPO_PUBLIC_SWAP_API_URL ?? "";
+
+  const getEvmQuote = async () => {
+    setQuoteLoading(true);
+    setQuoteError("");
+    setEvmQuote(null);
+    try {
+      if (!swapApiBaseUrl.trim()) {
+        throw new Error("The server-side swap quote service has not been configured for this app.");
+      }
+      if (!evmWallet) {
+        throw new Error("Connect an EVM wallet before requesting a swap quote.");
+      }
+
+      const numericChainId = evmWallet.chainId.startsWith("0x")
+        ? Number.parseInt(evmWallet.chainId.slice(2), 16).toString()
+        : evmWallet.chainId;
+      if (!/^\d+$/.test(numericChainId)) {
+        throw new Error("The connected EVM wallet returned an invalid network ID.");
+      }
+
+      const sellTokenAmount = parseTokenUnits(sellAmount, Number(sellDecimals));
+      const quote = await requestEvmSwapQuote(swapApiBaseUrl, {
+        chainId: numericChainId,
+        sellToken: sellToken.trim(),
+        buyToken: buyToken.trim(),
+        sellAmount: sellTokenAmount,
+        taker: evmWallet.address,
+        slippageBps: 100,
+      });
+      setEvmQuote(quote);
+    } catch (error) {
+      setQuoteError(
+        error instanceof Error ? error.message : "Could not obtain an EVM swap quote.",
+      );
+    } finally {
+      setQuoteLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -469,10 +522,133 @@ export function ExchangeHub({ chainId, compact }: ExchangeHubProps) {
                 Instant swaps unlock after route and security setup
               </Text>
             </View>
+            <View style={styles.quoteDivider} />
+            <Text style={styles.eyebrow}>SERVER-SIDE EVM QUOTE</Text>
+            <Text style={styles.muted}>
+              Request a firm route quote through the protected S Coin quote
+              service. Token addresses must be enabled in the server allowlist.
+            </Text>
+            <Text style={styles.fieldLabel}>SELL TOKEN CONTRACT</Text>
+            <TextInput
+              accessibilityLabel="Sell token contract address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              onChangeText={(value) => { setSellToken(value); setEvmQuote(null); }}
+              placeholder="0x…"
+              placeholderTextColor={palette.muted}
+              style={styles.quoteInput}
+              value={sellToken}
+            />
+            <Text style={styles.fieldLabel}>BUY TOKEN CONTRACT</Text>
+            <TextInput
+              accessibilityLabel="Buy token contract address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              onChangeText={(value) => { setBuyToken(value); setEvmQuote(null); }}
+              placeholder="0x…"
+              placeholderTextColor={palette.muted}
+              style={styles.quoteInput}
+              value={buyToken}
+            />
+            <View style={styles.quoteAmountRow}>
+              <View style={styles.quoteAmountColumn}>
+                <Text style={styles.fieldLabel}>SELL AMOUNT</Text>
+                <TextInput
+                  accessibilityLabel="Sell amount"
+                  keyboardType="decimal-pad"
+                  onChangeText={(value) => { setSellAmount(value); setEvmQuote(null); }}
+                  placeholder="1"
+                  placeholderTextColor={palette.muted}
+                  style={styles.quoteInput}
+                  value={sellAmount}
+                />
+              </View>
+              <View style={styles.quoteAmountColumn}>
+                <Text style={styles.fieldLabel}>SELL DECIMALS</Text>
+                <TextInput
+                  accessibilityLabel="Sell token decimals"
+                  keyboardType="number-pad"
+                  onChangeText={(value) => { setSellDecimals(value); setEvmQuote(null); }}
+                  placeholder="18"
+                  placeholderTextColor={palette.muted}
+                  style={styles.quoteInput}
+                  value={sellDecimals}
+                />
+              </View>
+              <View style={styles.quoteAmountColumn}>
+                <Text style={styles.fieldLabel}>BUY DECIMALS</Text>
+                <TextInput
+                  accessibilityLabel="Buy token decimals"
+                  keyboardType="number-pad"
+                  onChangeText={(value) => { setBuyDecimals(value); setEvmQuote(null); }}
+                  placeholder="18"
+                  placeholderTextColor={palette.muted}
+                  style={styles.quoteInput}
+                  value={buyDecimals}
+                />
+              </View>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              disabled={quoteLoading || !evmWallet || !swapApiBaseUrl.trim()}
+              onPress={() => void getEvmQuote()}
+              style={[
+                styles.quoteButton,
+                (quoteLoading || !evmWallet || !swapApiBaseUrl.trim()) && styles.disabled,
+              ]}
+            >
+              {quoteLoading ? (
+                <ActivityIndicator color="#0B130B" size="small" />
+              ) : (
+                <Text style={styles.quoteButtonText}>Get EVM swap quote</Text>
+              )}
+            </Pressable>
+            {!swapApiBaseUrl.trim() ? (
+              <Text style={styles.sourceNote}>
+                Configure EXPO_PUBLIC_SWAP_API_URL after deploying the quote service.
+                No API key belongs in this app.
+              </Text>
+            ) : null}
+            {quoteError ? (
+              <Text accessibilityRole="alert" style={styles.inlineError}>{quoteError}</Text>
+            ) : null}
+            {evmQuote ? (
+              <View style={styles.quoteResult}>
+                <Text style={styles.connectedLabel}>0x QUOTE · NOT EXECUTED</Text>
+                <Text style={styles.quoteResultValue}>
+                  {formatTokenUnits(
+                    evmQuote.quote.buyAmount ?? "0",
+                    Number(buyDecimals),
+                  )} output tokens (estimated)
+                </Text>
+                <Text style={styles.muted}>
+                  Minimum output: {formatTokenUnits(
+                    evmQuote.quote.minBuyAmount ?? "0",
+                    Number(buyDecimals),
+                  )}
+                </Text>
+                <Text style={styles.quoteResultMeta}>
+                  Network: {evmQuote.quote.chainId ?? "verified by provider"}
+                </Text>
+                {evmQuote.quote.issues?.allowance?.spender ? (
+                  <Text style={styles.quoteWarning}>
+                    Token approval may be required for spender {shortenWalletAddress(
+                      evmQuote.quote.issues.allowance.spender,
+                    )}. No approval has been requested.
+                  </Text>
+                ) : null}
+                <Text style={styles.sourceNote}>
+                  This is a firm quote response, not a completed swap. The
+                  app has not signed, approved or broadcast the transaction.
+                  Re-request a fresh quote immediately before any later execution.
+                </Text>
+              </View>
+            ) : null}
             <Text style={styles.sourceNote}>
-              Native S Coin needs a live DEX / IBC route. EVM swaps need a
-              supported chain, a server-side aggregator key, and an external
-              wallet to review and sign the transaction.
+              Native S Coin needs a registered DEX / IBC route and liquidity.
+              EVM execution is not enabled in this release; wallet approvals,
+              transaction simulation, chain checks and explicit signing must
+              be completed before funds can move.
             </Text>
           </View>
         </View>
@@ -694,6 +870,16 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     marginTop: 10,
   },
+  quoteDivider: { height: 1, backgroundColor: palette.border, marginVertical: 17 },
+  quoteInput: { minHeight: 40, borderRadius: 8, borderWidth: 1, borderColor: "#33413E", backgroundColor: "#0B1111", color: palette.ink, paddingHorizontal: 10, fontSize: 10 },
+  quoteAmountRow: { flexDirection: "row", gap: 8 },
+  quoteAmountColumn: { flex: 1, minWidth: 0 },
+  quoteButton: { minHeight: 44, borderRadius: 8, backgroundColor: palette.accent, alignItems: "center", justifyContent: "center", marginTop: 15, paddingHorizontal: 12 },
+  quoteButtonText: { color: "#0B130B", fontSize: 10, fontWeight: "800" },
+  quoteResult: { padding: 13, borderRadius: 10, borderWidth: 1, borderColor: "#3A5142", backgroundColor: "#14221A", marginTop: 13, gap: 6 },
+  quoteResultValue: { color: palette.ink, fontSize: 15, fontWeight: "800", marginTop: 5 },
+  quoteResultMeta: { color: palette.muted, fontSize: 9, marginTop: 3 },
+  quoteWarning: { color: palette.warning, fontSize: 9, lineHeight: 15, marginTop: 5 },
   swapHeading: {
     flexDirection: "row",
     alignItems: "center",
