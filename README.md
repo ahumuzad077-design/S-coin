@@ -222,3 +222,7 @@ The market screen now discovers active Binance Spot markets quoted in USDT from
 Binance exchange metadata, ranks them by 24-hour quote volume, and supports
 search across the full discovered set. It shows the top 100 by default and
 updates from Binance's public all-market 24-hour ticker WebSocket stream.
+
+The selected market detail panel also shows 24 hourly candles, a top-of-book
+snapshot (up to 10 bid and ask levels), and recent trades. These are public
+read-only market-data endpoints; they do not place or settle orders.
