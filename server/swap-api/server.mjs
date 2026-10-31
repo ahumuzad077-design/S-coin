@@ -308,7 +308,17 @@ export function createSwapApiServer(env = process.env, fetchImpl = fetch) {
       json(response, 200, {
         status: "ok",
         evmQuoteEnabled: Boolean(config.zeroXApiKey && config.evmChainIds.size && config.tokensByChain.size),
-        evmSwapExecutionConfigured: Boolean(config.swapExecutionEnabled),
+        evmSwapExecutionConfigured: Boolean(
+          config.swapExecutionEnabled &&
+          config.evmChainIds.size > 0 &&
+          config.tokensByChain.size > 0 &&
+          [...config.transactionTargetsByChain.entries()].some(([chainId, targets]) =>
+            config.evmChainIds.has(chainId) &&
+            config.tokensByChain.has(chainId) &&
+            targets.size > 0 &&
+            (config.allowanceTargetsByChain.get(chainId)?.size ?? 0) > 0
+          )
+        ),
         cosmosRoutePreviewEnabled: config.cosmosChainIds.size > 0,
         transactionBroadcastEnabled: false,
       });
