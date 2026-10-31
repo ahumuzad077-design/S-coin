@@ -1,0 +1,48 @@
+name: Sync Expo Router SDK dependencies
+
+on:
+  push:
+    branches:
+      - feat/scoin-wallet-markets
+    paths:
+      - "client/package.json"
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - name: Check out the updated feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Resolve SDK-compatible Expo Router dependencies and lockfile
+        run: |
+          npm install --no-audit --no-fund
+          npx expo install expo-router react-native-safe-area-context react-native-screens expo-linking expo-constants
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Commit the generated lockfile
+        run: |
+          git -C .. config user.name "github-actions[bot]"
+          git -C .. config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C .. add client/package.json client/package-lock.json
+          if ! git -C .. diff --cached --quiet; then
+            git -C .. commit -m "chore(client): sync Expo Router SDK dependencies"
+            git -C .. push origin "${GITHUB_REF_NAME}"
+          fi
