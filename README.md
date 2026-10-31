@@ -117,24 +117,6 @@ The local RPC ports are `26657`, `26654`, `26651`, and `26648`, respectively.
 Keep them local; do not expose these development nodes to the internet. Press
 `Ctrl+C` in each terminal to stop its validator.
 
-## Meridian securities-market simulator (pre-licensing)
-
-The Expo app includes a **MERIDIAN Markets** tab connected to an isolated local Go simulator in [`exchange/`](./exchange/). This is a synthetic paper-trading prototype only, not a securities exchange, broker, investment offer, custodian, central securities depository, clearing house, or settlement service. Its fictional issuers, prices, balances, orders and fills have no real-world value. The matching engine is in-memory and resets when the demo process stops.
-
-Run the simulator from the repository root:
-
-```sh
-cd exchange
-go test ./...
-go run ./cmd/meridian-demo
-```
-
-It binds to `127.0.0.1:8788` by default and refuses non-loopback listen addresses. Start the Expo client in a second terminal using the normal [client instructions](./client/AGENTS.md). The Markets tab uses the local simulator endpoint automatically for web, iOS simulator and Android emulator development. For a different local endpoint, set `EXPO_PUBLIC_MERIDIAN_API_URL` before starting Expo.
-
-Read [`exchange/README.md`](./exchange/README.md) for API endpoints, the synthetic matching and reservation rules, and limitations. Read [`docs/meridian-concept.md`](./docs/meridian-concept.md) for the proposed future regulated-exchange thesis.
-
-**Production boundary:** MERIDIAN is not licensed or approved to operate a securities exchange. The simulator must not be exposed to the internet or connected to real investors, cash, securities, S Coin balances, SQM reserve assets, broker systems, custody systems or settlement infrastructure. Any real exchange operation requires the relevant regulator approvals, qualified market-operator governance, legal advice, approved trading participants, depository/clearing/settlement arrangements, operational capital, security testing and jurisdiction-specific permissions. The simulator does not modify the S Coin native `uscoin` monetary policy or the separate `issuer/` cash-backed asset foundation.
-
 ## Before operating a public testnet
 
 A public testnet needs independently operated validators, a coordinated
