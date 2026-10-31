@@ -160,3 +160,103 @@ export async function requestEvmSwapQuote(
     clearTimeout(timeout);
   }
 }
+
+
+export interface CosmosRoutePreviewRequest {
+  sourceAssetChainId: string;
+  sourceAssetDenom: string;
+  destAssetChainId: string;
+  destAssetDenom: string;
+  amountIn: string;
+}
+
+export interface CosmosRoutePreview {
+  estimated_amount_out?: string;
+  min_amount_out?: string;
+  summary?: string;
+  chain_ids?: string[];
+  does_swap?: boolean;
+  swap_price_impact_percent?: string;
+  estimated_route_duration_seconds?: number;
+  estimated_fees?: Array<{
+    amount?: string;
+    denom?: string;
+    chain_id?: string;
+  }>;
+}
+
+export interface CosmosRoutePreviewResponse {
+  provider: "Skip Go";
+  route: CosmosRoutePreview;
+  executionEnabled: false;
+  notice: string;
+}
+
+export async function requestCosmosRoutePreview(
+  baseUrl: string,
+  request: CosmosRoutePreviewRequest,
+): Promise<CosmosRoutePreviewResponse> {
+  const normalizedUrl = baseUrl.trim().replace(/\/+$/, "");
+  if (!/^https:\/\/[^/]+$/i.test(normalizedUrl)) {
+    throw new Error("Configure the swap quote service using a trusted HTTPS URL.");
+  }
+  if (!/^[1-9]\d{0,77}$/.test(request.amountIn)) {
+    throw new Error("Route amount must be a positive integer in base units.");
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+
+  try {
+    const response = await fetch(normalizedUrl + "/v1/cosmos/route-preview", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+      signal: controller.signal,
+    });
+
+    const payload: unknown = await response.json();
+    if (!response.ok) {
+      const message =
+        typeof payload === "object" &&
+        payload !== null &&
+        "error" in payload &&
+        typeof payload.error === "string"
+          ? payload.error
+          : "The Cosmos route service could not return a route.";
+      throw new Error(message);
+    }
+
+    if (
+      typeof payload !== "object" ||
+      payload === null ||
+      !("provider" in payload) ||
+      payload.provider !== "Skip Go" ||
+      !("route" in payload) ||
+      typeof payload.route !== "object" ||
+      payload.route === null
+    ) {
+      throw new Error("The Cosmos route service returned an invalid response.");
+    }
+
+    const route = payload.route as CosmosRoutePreview;
+    if (
+      typeof route.estimated_amount_out !== "string" ||
+      !/^\d+$/.test(route.estimated_amount_out)
+    ) {
+      throw new Error("The Cosmos route response did not include a valid output amount.");
+    }
+
+    return payload as CosmosRoutePreviewResponse;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("The Cosmos route request timed out.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
