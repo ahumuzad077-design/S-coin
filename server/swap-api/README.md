@@ -56,3 +56,15 @@ not implemented here. Do not expose a quote response as a guaranteed fill.
 - Put this service behind HTTPS and an edge rate limiter/WAF in production.
   Configure exact CORS origins and secrets via the hosting platform's secret
   manager. Do not commit a populated \`.env\` file.
+
+
+## Production access control
+
+The built-in exact-origin CORS policy is a browser policy, not authentication.
+Native clients and custom HTTP clients can omit the Origin header. Do not expose
+this service publicly as a production quote proxy without placing it behind a
+real user/session authentication gateway and a distributed rate limiter or
+WAF. The in-memory socket-IP limiter is a local safety layer only; it is not
+shared across replicas and must not be treated as a production abuse-control
+boundary. Trust forwarded client IPs only when your hosting platform's reverse
+proxy explicitly sanitizes and supplies those headers.
