@@ -52,6 +52,12 @@ OrganisationVerificationStatus string `json:"organisationVerificationStatus"`
 	UpdatedAt             time.Time `json:"updatedAt"`
 }
 
+type CompanyVerificationInput struct {
+	Decision string `json:"decision"`
+	RegistryEvidenceURL string `json:"registryEvidenceUrl"`
+	Reason string `json:"reason"`
+}
+
 type ReviewDecisionInput struct {
 	Decision string `json:"decision"`
 	Reason   string `json:"reason"`
