@@ -36,9 +36,12 @@ custodial wallet, centralized exchange, or production swap service.
 - Cosmos transaction signing or send/receive. Keplr is connected only to show
   the account address. The exact trusted S Coin chain ID and public RPC/REST
   endpoints still need to be supplied and configured.
-- Native mobile MetaMask Connect / WalletConnect or Cosmos wallet pairing. The
-  current EVM and Keplr connections are browser-provider integrations; native
-  Expo builds do not yet establish a wallet session.
+- Independent seed-phrase wallet generation/import, private-key custody, or
+  recovery-key backup. MetaMask Connect links to an external self-custody
+  wallet; it does not make S Coin the wallet key custodian.
+- Native Keplr/Cosmos wallet pairing. Keplr is currently connected through a
+  browser provider only; native Expo builds still need a supported Cosmos
+  WalletConnect session and an exact, registered S Coin chain configuration.
 - Any EVM token approval, transaction signing, swap broadcast, receipt
   tracking, or refund/recovery process. Quotes are not trades.
 - Cosmos Skip \`/msgs\` generation, signing, or cross-chain transaction
