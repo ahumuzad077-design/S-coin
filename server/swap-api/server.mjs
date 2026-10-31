@@ -55,7 +55,7 @@ function addressAllowlist(value = "{}", name = "ADDRESS_ALLOWLIST_JSON") {
   }
   const result = new Map();
   for (const [chainId, addresses] of Object.entries(parsed)) {
-    if (!/^\\d+$/.test(chainId) || !Array.isArray(addresses)) {
+    if (!/^\d+$/.test(chainId) || !Array.isArray(addresses)) {
       throw new Error(name + " entries must map numeric chain IDs to address arrays");
     }
     const normalized = addresses.map((address) => {
