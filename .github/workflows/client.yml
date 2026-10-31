@@ -50,6 +50,9 @@ jobs:
       - name: Install from synchronized lockfile
         run: npm ci
 
+      - name: Test EVM transfer validation and wallet calls
+        run: npm run test:wallet
+
       - name: TypeScript typecheck
         run: npx tsc --noEmit
 
