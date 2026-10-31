@@ -176,8 +176,9 @@ been security audited and is not suitable for managing real funds.
 
 The feature branch `feat/scoin-wallet-markets` adds a Markets screen to the Expo
 client. It reads public Binance Spot market data for selected USDT pairs and
-supports browser-injected MetaMask-compatible EVM account connections and
-Keplr connections for a preconfigured S Coin Cosmos chain.
+supports browser-injected MetaMask-compatible EVM account connections, native
+MetaMask Connect sessions in Android/iOS builds, and Keplr connections for a
+preconfigured S Coin Cosmos chain.
 
 Run the existing app as described above, then open **Markets** in the app
 navigation. No new package installation is required for this initial browser
@@ -189,8 +190,9 @@ This is an early connection and market-data stage, not a full wallet or
 exchange. It does not generate or store recovery phrases, sign transactions,
 send funds, place Binance orders, process deposits/withdrawals, or execute
 crypto swaps. Browser extension connections are supported in web builds;
-native mobile wallet pairing still needs a WalletConnect / MetaMask Connect
-integration. The swap panel is an indicative conversion preview only.
+native MetaMask Connect requires a custom Expo development/native build and
+trusted RPC configuration. Keplr mobile pairing is still not configured. The
+swap panel is a quote/route preview only; it does not sign or execute trades.
 
 See [wallet and exchange integration notes](./docs/wallet-and-exchange-integration.md)
 for the architecture, security boundary, regulatory readiness and next stages.
