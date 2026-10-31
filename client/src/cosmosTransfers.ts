@@ -91,7 +91,7 @@ function getConfiguredCosmosNetwork(expectedChainId: string) {
   } catch {
     throw new Error("EXPO_PUBLIC_SCOIN_GAS_PRICE must use the format <decimal>uscoin.");
   }
-  if (gasPrice.denom !== BASE_DENOM || gasPrice.amount.isLessThanOrEqualTo(0)) {
+  if (gasPrice.denom !== BASE_DENOM || !Number.isFinite(Number(gasPrice.amount.toString())) || Number(gasPrice.amount.toString()) <= 0) {
     throw new Error("S Coin fees must use the configured uscoin base denomination and a positive gas price.");
   }
   return { chainId: configuredChainId, rpcUrl, gasPrice };
