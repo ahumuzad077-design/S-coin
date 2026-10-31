@@ -137,11 +137,29 @@ export async function requestEvmSwapQuote(
     }
 
     const quote = payload.quote as EvmSwapQuote;
+    const normalizeChainId = (value: string | number): string => {
+      const text = String(value);
+      return /^0x[0-9a-fA-F]+$/.test(text)
+        ? BigInt(text).toString()
+        : /^\d+$/.test(text)
+          ? BigInt(text).toString()
+          : "";
+    };
     if (
+      normalizeChainId(quote.chainId ?? "") !== normalizeChainId(request.chainId) ||
+      typeof quote.sellToken !== "string" ||
+      quote.sellToken.toLowerCase() !== request.sellToken.toLowerCase() ||
+      typeof quote.buyToken !== "string" ||
+      quote.buyToken.toLowerCase() !== request.buyToken.toLowerCase() ||
+      quote.sellAmount !== request.sellAmount ||
+      typeof quote.taker !== "string" ||
+      quote.taker.toLowerCase() !== request.taker.toLowerCase() ||
+      quote.liquidityAvailable !== true ||
       typeof quote.buyAmount !== "string" ||
       !/^[1-9]\d*$/.test(quote.buyAmount) ||
       typeof quote.minBuyAmount !== "string" ||
-      !/^\d+$/.test(quote.minBuyAmount) ||
+      !/^[1-9]\d*$/.test(quote.minBuyAmount) ||
+      BigInt(quote.minBuyAmount) > BigInt(quote.buyAmount) ||
       typeof quote.transaction !== "object" ||
       quote.transaction === null ||
       typeof quote.transaction.to !== "string" ||
@@ -149,9 +167,15 @@ export async function requestEvmSwapQuote(
       typeof quote.transaction.data !== "string" ||
       !/^0x(?:[a-fA-F0-9]{2})*$/.test(quote.transaction.data) ||
       typeof quote.transaction.value !== "string" ||
-      !/^\d+$/.test(quote.transaction.value)
+      !/^\d+$/.test(quote.transaction.value) ||
+      typeof (payload as Record<string, unknown>).executionEnabled !== "boolean"
     ) {
-      throw new Error("The swap service returned an incomplete or invalid transaction quote.");
+      throw new Error("The swap service returned a quote that does not match this wallet request or contains invalid fields.");
+    }
+
+    const allowanceSpender = quote.issues?.allowance?.spender ?? quote.allowanceTarget;
+    if (allowanceSpender !== undefined && !/^0x[a-fA-F0-9]{40}$/.test(allowanceSpender)) {
+      throw new Error("The swap service returned an invalid token allowance target.");
     }
 
     const responseQuote = payload as EvmSwapQuoteResponse;
