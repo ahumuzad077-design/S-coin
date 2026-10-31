@@ -7,6 +7,7 @@ const emptyModule = path.resolve(__dirname, "src/empty-module.js");
 config.resolver.extraNodeModules = {
   ...config.resolver.extraNodeModules,
   stream: require.resolve("readable-stream"),
+  util: require.resolve("util/"),
   crypto: emptyModule,
   http: emptyModule,
   https: emptyModule,
