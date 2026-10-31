@@ -37,9 +37,12 @@ import {
 } from "./walletAdapters";
 import {
   createNativeTransferPreview,
+  createErc20TransferPreview,
   submitNativeTransfer,
+  submitErc20Transfer,
   waitForEvmTransactionReceipt,
   type NativeTransferPreview,
+  type Erc20TransferPreview,
 } from "./evmTransactions";
 import {
   formatTokenUnits,
@@ -77,6 +80,14 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
   const [nativeTransferError, setNativeTransferError] = useState("");
   const [nativeTransferHash, setNativeTransferHash] = useState("");
   const [nativeTransferStatus, setNativeTransferStatus] = useState("");
+  const [erc20TokenAddress, setErc20TokenAddress] = useState("");
+  const [erc20Recipient, setErc20Recipient] = useState("");
+  const [erc20Amount, setErc20Amount] = useState("1");
+  const [erc20Preview, setErc20Preview] = useState<Erc20TransferPreview | null>(null);
+  const [erc20TransferLoading, setErc20TransferLoading] = useState(false);
+  const [erc20TransferError, setErc20TransferError] = useState("");
+  const [erc20TransferHash, setErc20TransferHash] = useState("");
+  const [erc20TransferStatus, setErc20TransferStatus] = useState("");
   const [scoinWallet, setScoinWallet] = useState<WalletConnection | null>(null);
   const [scoinBalances, setScoinBalances] = useState<CoinBalance[] | null>(null);
   const [scoinBalanceError, setScoinBalanceError] = useState("");
@@ -181,6 +192,10 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
       setNativeTransferHash("");
       setNativeTransferStatus("");
       setNativeTransferError("Wallet account or network changed. The previous transfer preview has been cleared.");
+      setErc20Preview(null);
+      setErc20TransferHash("");
+      setErc20TransferStatus("");
+      setErc20TransferError("Wallet account or network changed. The previous token-transfer preview has been cleared.");
     });
   }, [evmWallet]);
 
@@ -322,6 +337,87 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
     }
   };
 
+  const previewErc20Transfer = async () => {
+    setErc20TransferLoading(true);
+    setErc20TransferError("");
+    setErc20TransferHash("");
+    setErc20TransferStatus("");
+    setErc20Preview(null);
+    try {
+      if (!evmWallet) throw new Error("Connect an EVM wallet before preparing a token transfer.");
+      const enabledChains = (process.env.EXPO_PUBLIC_EVM_TRANSFER_CHAIN_IDS ?? "0xaa36a7")
+        .split(",")
+        .map((value: string) => value.trim().toLowerCase())
+        .filter(Boolean);
+      if (!enabledChains.includes(evmWallet.chainId.toLowerCase())) {
+        throw new Error("Token transfers are disabled on this network. Use the configured test network.");
+      }
+      const preview = await createErc20TransferPreview(getActiveEvmProvider(), {
+        chainId: evmWallet.chainId,
+        from: evmWallet.address,
+        to: erc20Recipient.trim(),
+        tokenAddress: erc20TokenAddress.trim(),
+        amount: erc20Amount.trim(),
+      });
+      setErc20Preview(preview);
+    } catch (error) {
+      setErc20TransferError(
+        error instanceof Error ? error.message : "Could not prepare this token transfer.",
+      );
+    } finally {
+      setErc20TransferLoading(false);
+    }
+  };
+
+  const confirmErc20Transfer = async () => {
+    setErc20TransferLoading(true);
+    setErc20TransferError("");
+    try {
+      if (!evmWallet || !erc20Preview) {
+        throw new Error("Prepare and review the token transfer before continuing.");
+      }
+      const enabledChains = (process.env.EXPO_PUBLIC_EVM_TRANSFER_CHAIN_IDS ?? "0xaa36a7")
+        .split(",")
+        .map((value: string) => value.trim().toLowerCase())
+        .filter(Boolean);
+      if (!enabledChains.includes(evmWallet.chainId.toLowerCase())) {
+        throw new Error("Token transfers are disabled on this network.");
+      }
+      const provider = getActiveEvmProvider();
+      const hash = await submitErc20Transfer(provider, erc20Preview);
+      setErc20TransferHash(hash);
+      setErc20TransferStatus("Submitted to the network. Waiting for confirmation…");
+      setErc20Preview(null);
+      void waitForEvmTransactionReceipt(provider, evmWallet.chainId, hash)
+        .then(async (receipt) => {
+          if (receipt.status === "success") {
+            setErc20TransferStatus("Confirmed in block " + BigInt(receipt.blockNumber).toString() + ".");
+            try {
+              const balance = await refreshConnectedEvmBalance();
+              setEvmWallet((current) => current ? { ...current, ...balance } : current);
+            } catch {
+              // The transaction is confirmed even if the native balance refresh fails.
+            }
+          } else {
+            setErc20TransferStatus("The network marked this token transfer as reverted.");
+          }
+        })
+        .catch((error) => {
+          setErc20TransferStatus(
+            error instanceof Error
+              ? "Confirmation not yet verified: " + error.message
+              : "Confirmation not yet verified. Keep the transaction hash.",
+          );
+        });
+    } catch (error) {
+      setErc20TransferError(
+        error instanceof Error ? error.message : "The wallet could not submit this token transfer.",
+      );
+    } finally {
+      setErc20TransferLoading(false);
+    }
+  };
+
   const confirmNativeTransfer = async () => {
     setNativeTransferLoading(true);
     setNativeTransferError("");
@@ -385,6 +481,10 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
       setNativeTransferHash("");
       setNativeTransferStatus("");
       setNativeTransferError("");
+      setErc20Preview(null);
+      setErc20TransferHash("");
+      setErc20TransferStatus("");
+      setErc20TransferError("");
       setWalletError("");
     } catch (error) {
       setWalletError(
@@ -1005,6 +1105,132 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
               </>
             ) : (
               <Text style={styles.sourceNote}>Connect an EVM wallet above to prepare a native-asset transfer.</Text>
+            )}
+          </View>
+
+          <View style={styles.panel}>
+            <Text style={styles.eyebrow}>TOKEN TRANSFER · ERC-20</Text>
+            <Text style={styles.panelTitle}>Send an EVM token</Text>
+            <Text style={styles.muted}>
+              Transfer a standard ERC-20 token from the connected account. The
+              app reads the token contract, decimals and balance, then estimates
+              the network fee. Use only token contract addresses you have verified.
+            </Text>
+            {evmWallet ? (
+              <>
+                <Text style={styles.fieldLabel}>TOKEN CONTRACT ADDRESS</Text>
+                <TextInput
+                  accessibilityLabel="ERC-20 token contract address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onChangeText={(value) => {
+                    setErc20TokenAddress(value);
+                    setErc20Preview(null);
+                    setErc20TransferHash("");
+                  }}
+                  placeholder="0x…"
+                  placeholderTextColor={palette.muted}
+                  style={styles.quoteInput}
+                  value={erc20TokenAddress}
+                />
+                <Text style={styles.fieldLabel}>RECIPIENT ADDRESS</Text>
+                <TextInput
+                  accessibilityLabel="ERC-20 recipient address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onChangeText={(value) => {
+                    setErc20Recipient(value);
+                    setErc20Preview(null);
+                    setErc20TransferHash("");
+                  }}
+                  placeholder="0x…"
+                  placeholderTextColor={palette.muted}
+                  style={styles.quoteInput}
+                  value={erc20Recipient}
+                />
+                <Text style={styles.fieldLabel}>TOKEN AMOUNT</Text>
+                <TextInput
+                  accessibilityLabel="ERC-20 token transfer amount"
+                  keyboardType="decimal-pad"
+                  onChangeText={(value) => {
+                    setErc20Amount(value);
+                    setErc20Preview(null);
+                    setErc20TransferHash("");
+                  }}
+                  placeholder="1"
+                  placeholderTextColor={palette.muted}
+                  style={styles.quoteInput}
+                  value={erc20Amount}
+                />
+                {erc20Preview ? (
+                  <View style={styles.quoteResult}>
+                    <Text style={styles.connectedLabel}>REVIEW BEFORE WALLET APPROVAL</Text>
+                    <Text style={styles.quoteResultMeta}>
+                      Token: {shortenWalletAddress(erc20Preview.tokenAddress)}
+                    </Text>
+                    <Text style={styles.quoteResultMeta}>
+                      From: {shortenWalletAddress(erc20Preview.from)}
+                    </Text>
+                    <Text style={styles.quoteResultMeta}>
+                      To: {shortenWalletAddress(erc20Preview.to)}
+                    </Text>
+                    <Text style={styles.quoteResultValue}>
+                      {erc20Preview.amount} tokens
+                    </Text>
+                    <Text style={styles.quoteResultMeta}>
+                      Available token balance: {erc20Preview.tokenBalance}
+                    </Text>
+                    <Text style={styles.quoteResultMeta}>
+                      Estimated network fee: {erc20Preview.estimatedGasFee} {evmWallet.nativeSymbol ?? "NATIVE"}
+                    </Text>
+                    <Text style={styles.sourceNote}>
+                      Check the token contract and recipient carefully. The wallet
+                      will request approval for a token-contract interaction.
+                    </Text>
+                  </View>
+                ) : null}
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={erc20TransferLoading || !erc20TokenAddress.trim() || !erc20Recipient.trim()}
+                  onPress={() => void previewErc20Transfer()}
+                  style={[
+                    styles.quoteButton,
+                    (erc20TransferLoading || !erc20TokenAddress.trim() || !erc20Recipient.trim()) && styles.disabled,
+                  ]}
+                >
+                  {erc20TransferLoading && !erc20Preview ? (
+                    <ActivityIndicator color="#0B130B" size="small" />
+                  ) : (
+                    <Text style={styles.quoteButtonText}>Read token & prepare transfer</Text>
+                  )}
+                </Pressable>
+                {erc20Preview ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={erc20TransferLoading}
+                    onPress={() => void confirmErc20Transfer()}
+                    style={[styles.quoteButton, erc20TransferLoading && styles.disabled]}
+                  >
+                    {erc20TransferLoading ? (
+                      <ActivityIndicator color="#0B130B" size="small" />
+                    ) : (
+                      <Text style={styles.quoteButtonText}>Continue to MetaMask approval</Text>
+                    )}
+                  </Pressable>
+                ) : null}
+                {erc20TransferError ? (
+                  <Text accessibilityRole="alert" style={styles.inlineError}>{erc20TransferError}</Text>
+                ) : null}
+                {erc20TransferHash ? (
+                  <View style={styles.quoteResult}>
+                    <Text style={styles.connectedLabel}>TOKEN TRANSACTION SUBMITTED</Text>
+                    <Text selectable style={styles.quoteResultMeta}>{erc20TransferHash}</Text>
+                    <Text style={styles.muted}>{erc20TransferStatus}</Text>
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <Text style={styles.sourceNote}>Connect an EVM wallet above to prepare an ERC-20 transfer.</Text>
             )}
           </View>
 
