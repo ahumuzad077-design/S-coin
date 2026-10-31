@@ -3,9 +3,13 @@ import assert from "node:assert/strict";
 import {
   createNativeTransferPreview,
   createErc20TransferPreview,
+  createErc20ApprovalPreview,
+  createEvmSwapPreview,
   getEvmTransactionReceipt,
   parseNativeAmountToHex,
+  submitErc20Approval,
   submitErc20Transfer,
+  submitEvmSwap,
   submitNativeTransfer,
 } from "./evmTransactions.ts";
 
@@ -25,6 +29,9 @@ class MockWallet {
     this.tokenDecimals = overrides.tokenDecimals ?? 18;
     this.tokenBalance = overrides.tokenBalance ?? 5n * 10n ** 18n;
     this.contractCode = overrides.contractCode ?? "0x60006000";
+    this.tokenDecimals = overrides.tokenDecimals ?? 18;
+    this.tokenBalance = overrides.tokenBalance ?? 5n * 10n ** 18n;
+    this.allowance = overrides.allowance ?? 0n;
     this.sent = [];
   }
 
@@ -42,6 +49,8 @@ class MockWallet {
         return this.gasPrice;
       case "eth_getCode":
         return this.contractCode;
+      case "eth_getCode":
+        return this.contractCode;
       case "eth_call": {
         const data = params[0]?.data;
         if (data === "0x313ce567") {
@@ -49,6 +58,15 @@ class MockWallet {
         }
         if (typeof data === "string" && data.startsWith("0x70a08231")) {
           return "0x" + this.tokenBalance.toString(16).padStart(64, "0");
+        }
+        if (typeof data === "string" && data.startsWith("0xdd62ed3e")) {
+          return "0x" + this.allowance.toString(16).padStart(64, "0");
+        }
+        if (typeof data === "string" && data.startsWith("0x095ea7b3")) {
+          return "0x" + "0".repeat(63) + "1";
+        }
+        if (typeof data === "string" && data.startsWith("0x12345678")) {
+          return "0x";
         }
         throw new Error("Unexpected eth_call data: " + data);
       }
@@ -213,4 +231,149 @@ test("submits ERC-20 transfers only through the external wallet", async () => {
   assert.equal(wallet.sent[0].to, token);
   assert.equal(wallet.sent[0].value, "0x0");
   assert.match(wallet.sent[0].data, /^0xa9059cbb/);
+});
+
+
+const spender = "0x4444444444444444444444444444444444444444";
+const settler = "0x5555555555555555555555555555555555555555";
+const swapQuote = () => ({
+  chainId: 1,
+  taker: from,
+  sellToken: token,
+  buyToken: to,
+  sellAmount: "1000000000000000000",
+  buyAmount: "2000000000000000000",
+  minBuyAmount: "1980000000000000000",
+  liquidityAvailable: true,
+  allowanceTarget: spender,
+  issues: { allowance: { spender, actual: "0", expected: "1000000000000000000" } },
+  transaction: { to: settler, data: "0x12345678", value: "0" },
+});
+
+test("prepares an exact-amount ERC-20 allowance with gas preview", async () => {
+  const wallet = new MockWallet({ allowance: 0n });
+  const preview = await createErc20ApprovalPreview(wallet, {
+    chainId: "0x1",
+    from,
+    tokenAddress: token,
+    spender,
+    requiredAmount: "1250000000000000000",
+  });
+  assert.equal(preview.needsApproval, true);
+  assert.equal(preview.approvalAmount, "1250000000000000000");
+  assert.equal(preview.estimatedGasFee, "0.000021");
+  assert.equal(wallet.sent.length, 0);
+});
+
+test("skips ERC-20 approval when the allowance already covers the swap", async () => {
+  const wallet = new MockWallet({ allowance: 2n * 10n ** 18n });
+  const preview = await createErc20ApprovalPreview(wallet, {
+    chainId: "0x1",
+    from,
+    tokenAddress: token,
+    spender,
+    requiredAmount: "1000000000000000000",
+  });
+  assert.equal(preview.needsApproval, false);
+  assert.equal(preview.approvalAmount, "0");
+  assert.equal(wallet.sent.length, 0);
+});
+
+test("submits only the exact ERC-20 allowance through the connected wallet", async () => {
+  const wallet = new MockWallet({ allowance: 0n });
+  const preview = await createErc20ApprovalPreview(wallet, {
+    chainId: "0x1",
+    from,
+    tokenAddress: token,
+    spender,
+    requiredAmount: "1250000000000000000",
+  });
+  const hash = await submitErc20Approval(wallet, preview);
+  assert.equal(hash, txHash);
+  assert.equal(wallet.sent.length, 1);
+  assert.equal(wallet.sent[0].to, token);
+  assert.equal(wallet.sent[0].value, "0x0");
+  assert.match(wallet.sent[0].data, /^0x095ea7b3/);
+  assert.equal(wallet.sent[0].data.slice(10, 74), spender.slice(2).toLowerCase().padStart(64, "0"));
+  assert.equal(BigInt("0x" + wallet.sent[0].data.slice(74)), 1250000000000000000n);
+});
+
+test("prepares a swap only with matching chain, taker, balance, allowance and contract allowlists", async () => {
+  const amountIn = "1000000000000000000";
+  const wallet = new MockWallet({ allowance: 2n * 10n ** 18n });
+  const preview = await createEvmSwapPreview(wallet, {
+    chainId: "0x1",
+    from,
+    quote: swapQuote(),
+    receivedAt: Date.now(),
+    transactionTargets: [settler],
+    allowanceTargets: [spender],
+  });
+  assert.equal(preview.sellTokenDecimals, 18);
+  assert.equal(preview.buyTokenDecimals, 18);
+  assert.equal(preview.quote.sellAmount, amountIn);
+  assert.equal(preview.quoteMinBuyAmount, "1980000000000000000");
+  assert.equal(preview.estimatedGasFee, "0.000021");
+  assert.equal(wallet.sent.length, 0);
+});
+
+test("rejects a swap quote with a stale timestamp or a non-allowlisted target", async () => {
+  const wallet = new MockWallet({ allowance: 2n * 10n ** 18n });
+  const quote = swapQuote();
+  await assert.rejects(
+    createEvmSwapPreview(wallet, {
+      chainId: "0x1",
+      from,
+      quote,
+      receivedAt: Date.now() - 60_000,
+      transactionTargets: [settler],
+      allowanceTargets: [spender],
+    }),
+    /expired/,
+  );
+  await assert.rejects(
+    createEvmSwapPreview(wallet, {
+      chainId: "0x1",
+      from,
+      quote,
+      receivedAt: Date.now(),
+      transactionTargets: [token],
+      allowanceTargets: [spender],
+    }),
+    /not present.*allowlist/,
+  );
+});
+
+test("rejects swap execution when token allowance is insufficient", async () => {
+  const wallet = new MockWallet({ allowance: 1n });
+  await assert.rejects(
+    createEvmSwapPreview(wallet, {
+      chainId: "0x1",
+      from,
+      quote: swapQuote(),
+      receivedAt: Date.now(),
+      transactionTargets: [settler],
+      allowanceTargets: [spender],
+    }),
+    /Token approval is required/,
+  );
+});
+
+test("submits a fully revalidated swap only through the connected wallet", async () => {
+  const wallet = new MockWallet({ allowance: 2n * 10n ** 18n });
+  const preview = await createEvmSwapPreview(wallet, {
+    chainId: "0x1",
+    from,
+    quote: swapQuote(),
+    receivedAt: Date.now(),
+    transactionTargets: [settler],
+    allowanceTargets: [spender],
+  });
+  const hash = await submitEvmSwap(wallet, preview);
+  assert.equal(hash, txHash);
+  assert.equal(wallet.sent.length, 1);
+  assert.equal(wallet.sent[0].from, from);
+  assert.equal(wallet.sent[0].to, settler);
+  assert.equal(wallet.sent[0].data, "0x12345678");
+  assert.equal(wallet.sent[0].value, "0x0");
 });
