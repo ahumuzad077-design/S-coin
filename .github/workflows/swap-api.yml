@@ -1,6 +1,9 @@
 name: Swap API checks
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     paths:
       - "server/swap-api/**"
