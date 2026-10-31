@@ -1,110 +1,211 @@
-# S Coin wallet, market and exchange integration
+# S Coin markets, wallets and exchange integration
 
-Status: first-stage interface and read-only integrations. This document is an
-implementation boundary, not a claim that S Coin is a live exchange or a
-launched public chain.
+Status: the feature branch contains public market-data streaming, browser wallet
+account connections, and server-side **quote previews**. This is not a live
+custodial wallet, centralized exchange, or production swap service.
 
-## What this integration adds
+## Implemented in this branch
 
-- Binance Spot public market watch for selected USDT pairs, with a 15-second
-  refresh interval. The market-data-only domain does not require an API key.
-- Browser-injected EIP-1193 wallet connection for MetaMask and compatible EVM
-  wallets. It requests public account access and network ID only.
-- Browser Keplr connection for the native Cosmos SDK S Coin chain. The chain
-  must already be configured in Keplr with trusted RPC/REST endpoints.
-- A conversion preview based on public Binance prices. It is explicitly not
-  an executable quote or a trade.
-- A mobile/web exchange hub inside the existing Expo client.
+- Binance Spot REST snapshot and WebSocket market data for a selected set of
+  24 USDT pairs. The UI includes a searchable list, a local watchlist, a
+  selected-market summary, and reconnect handling. Data is public and does not
+  require a Binance account or API key.
+- Browser EIP-6963/EIP-1193 provider discovery for MetaMask and compatible EVM
+  wallets. The app requests public account access and chain ID only.
+- Browser Keplr account connection for a configured Cosmos SDK S Coin chain ID.
+  It checks the \`scoin1\` address prefix and never asks for a recovery phrase.
+- A quote-only Node service:
+  - \`POST /v1/evm/quote\` uses 0x AllowanceHolder quote API for an operator-
+    allowlisted EVM chain and pair of tokens.
+  - \`POST /v1/cosmos/route-preview\` uses Skip Go's route API for configured
+    Cosmos chains and denoms.
+  - Request validation, strict chain/token allowlists, size limits, per-IP
+    rate limiting, CORS allowlisting, server-side 0x key handling, and a
+    health endpoint.
+- An Expo UI that can request a firm EVM quote from the server and display its
+  minimum output and approval warning. It does not ask the wallet to approve
+  tokens or submit a transaction.
+- Separate CI workflows for Go, the Expo web client (typecheck + web export),
+  and the quote service (syntax checks + unit tests).
 
-## Architecture that must remain clear
+## What is deliberately not implemented
 
-S Coin is a Cosmos SDK / CometBFT chain with the scoin Bech32 address prefix.
-MetaMask is an EVM wallet; it cannot sign native Cosmos SDK S Coin transactions
-unless the chain is separately made EVM-compatible or an audited bridge/account
-abstraction layer is introduced. Keplr is the native Cosmos wallet connection.
+- Generating/importing recovery phrases, storing signing keys, private-key
+  custody, or an independent seed-phrase wallet. A wallet connection is not
+  the same thing as an S Coin wallet.
+- Cosmos transaction signing or send/receive. Keplr is connected only to show
+  the account address. The exact trusted S Coin chain ID and public RPC/REST
+  endpoints still need to be supplied and configured.
+- Native mobile MetaMask Connect / WalletConnect or Cosmos wallet pairing. The
+  current EVM and Keplr connections are browser-provider integrations; native
+  Expo builds do not yet establish a wallet session.
+- Any EVM token approval, transaction signing, swap broadcast, receipt
+  tracking, or refund/recovery process. Quotes are not trades.
+- Cosmos Skip \`/msgs\` generation, signing, or cross-chain transaction
+  submission. A route preview is not an executable IBC transfer.
+- Authenticated Binance account balances, private User Data Streams, trading,
+  order placement, deposits, withdrawals, margin, futures, or custody.
+- Fiat, bank, mobile-money, cash-in/cash-out, reserve management, or issuance.
+- A supported S Coin-to-other-coin route. S Coin is not yet listed in the
+  provider's supported-chain/asset route set, and the repository does not
+  prove that a production DEX pool or IBC path exists for it.
 
-The current S Coin codebase is a development/testnet scaffold. It does not
-identify a public production RPC, launch mainnet, or define an approved native
-supply policy. The app does not generate/import seed phrases, store private
-keys, sign transactions, or submit transfers.
+## Architecture
 
-## Binance integration boundary
+S Coin is a Cosmos SDK / CometBFT chain with the \`scoin\` Bech32 address
+prefix. MetaMask is an EVM wallet; it does not natively sign Cosmos SDK
+transactions. The app treats the two wallet families separately:
 
-The initial market screen uses:
-- https://developers.binance.com/docs/binance-spot-api-docs
-- https://github.com/binance/binance-spot-api-docs/blob/master/faqs/market_data_only.md
-- https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md
+- Keplr (Cosmos) for a trusted S Coin chain, once the chain is properly
+  configured.
+- MetaMask/EIP-1193 (EVM) for EVM-compatible networks. The chain ID is read
+  from the connected wallet and used when requesting a quote.
 
-Public market data is distinct from authenticated account, order placement,
-cancellation, wallet, deposit, or withdrawal operations. Do not put Binance
-API secrets in Expo environment variables, browser code, mobile bundles,
-GitHub, or client storage. Any later private Binance connection needs a
-server-side signing service, encrypted secret storage, per-user authentication,
-strict key permissions, audit logs, rate limits, and withdrawal permissions
-disabled by default. Start with Binance Spot Testnet; do not place live orders
-from a first-stage wallet UI.
+The existing S Coin chain is still a development/testnet scaffold. It has no
+verified production RPC, mainnet launch, approved native coin monetary policy,
+or supported public DEX/IBC liquidity route. The issuer module remains
+hard-disabled and its launch blockers are unchanged.
 
-## Swap / crypto-to-crypto boundary
+## Binance public market data
 
-An indicative conversion is not a swap. An executable swap needs a firm quote,
-route validation, token/chain allow-lists, allowance checks, slippage and price
-impact limits, gas estimation, transaction simulation where supported,
-user confirmation, wallet signing, receipt tracking, and failure/reversal
-handling.
+The app uses Binance's official public market-data host and stream host:
 
-For EVM chains, a DEX aggregator such as 0x can provide executable quotes and
-transaction calldata for supported networks. Its API key must be held by a
-server-side API, never in the app bundle. A user wallet must review and sign
-the returned transaction. This does not make the native S Coin Cosmos asset
-swappable: S Coin needs a supported DEX pool or verified IBC/cross-chain route,
-a token listing, liquidity, and a production chain endpoint first.
+- REST: \`https://data-api.binance.vision\`
+- WebSocket: \`wss://data-stream.binance.vision\`
+
+The selected ticker stream updates last price, 24-hour percentage change,
+high, low, and quote volume. The feed reconnects with backoff and recycles its
+connection before Binance's 24-hour connection limit. Binance confirms that
+these market-data-only endpoints do not require authentication; User Data
+Streams are not available on the market-data-only host.
+
+Do not put Binance API secrets in Expo environment variables, browser code,
+mobile bundles, GitHub, or client storage. Authenticated Binance integration
+would require a separately designed server-side service, encrypted secret
+storage, per-user authorization, restricted API permissions, audit logs,
+rate limits, and testnet validation. Withdrawal permissions should remain
+disabled by default.
+
+## Running the current code
+
+### Expo app
+
+Copy \`client/.env.example\` to \`client/.env\` and set only public URLs and the
+exact S Coin chain ID. Do not put secrets in \`EXPO_PUBLIC_*\` variables.
+
+\`\`\`sh
+cd client
+npm ci
+npm run web
+\`\`\`
+
+For the local read-only Cosmos API proxy, run \`npm run proxy\` in a second
+terminal. The existing local proxy remains GET-only and binds to loopback.
+
+### Quote service
+
+Run \`node server/swap-api/server.mjs\` from the repository root after setting
+the service environment variables in the deployment environment. The safe
+example file is \`server/swap-api/.env.example\`; create a local \`.env\` only
+for development and never commit it.
+
+Set:
+- \`ZEROX_API_KEY\`: server-only 0x API key.
+- \`SWAP_ALLOWED_EVM_CHAIN_IDS\`: numeric EVM chain IDs explicitly enabled.
+- \`SWAP_ALLOWED_TOKENS_JSON\`: per-chain token contract address allowlist.
+- \`SWAP_ALLOWED_COSMOS_CHAIN_IDS\`: Cosmos chain IDs enabled for Skip route
+  previews.
+- \`SWAP_API_ALLOWED_ORIGINS\`: exact app origin(s) allowed by CORS.
+- \`EXPO_PUBLIC_SWAP_API_URL\`: public HTTPS URL of the quote service in the
+  Expo app. This is a URL, not a secret.
+
+The service rejects unknown chains and tokens. Do not add a chain or token to
+the allowlist until its network, contract, liquidity, and legal status have
+been checked. The service has no transaction broadcast endpoint.
+
+## Swap execution requirements
+
+An executable swap requires more than a price or route:
+
+1. The connected wallet account and chain must match the quote request.
+2. Token contract addresses, decimals, network, spender and transaction target
+   must be verified against a trusted token/chain allowlist.
+3. Allowance must be queried and limited to the amount needed; approval must
+   be user-confirmed in the wallet.
+4. The transaction must be simulated, gas-estimated, and checked against
+   minimum output, price impact, slippage, expiry, and fee limits.
+5. The user must review and sign in their own wallet. S Coin must not receive
+   or store a wallet seed phrase or private key.
+6. The app must monitor the transaction receipt and define retry, timeout,
+   failed-transfer and cross-chain recovery procedures.
+
+0x provides EVM quotes and transaction calldata on supported networks; its
+API key is required and must stay server-side. Skip Go can generate routing
+information for supported Cosmos/IBC and EVM routes. Neither provider can make
+an unregistered S Coin chain liquid by itself. Add S Coin only after the chain
+registry/provider support, asset metadata, route, DEX liquidity, and IBC
+channels are in place.
+
+## Security, launch and Uganda compliance
+
+Before customer funds or fiat rails are enabled:
+
+1. Publish and verify the intended chain ID, RPC/API endpoints, validator
+   operators, explorer, network metadata, fee policy, native coin policy,
+   genesis allocations, upgrade authority and incident-response process.
+2. Complete an independent audit of chain, wallet, API, signing, swap, issuer,
+   mobile, and supply/monetary-policy components. Add phishing protection,
+   address validation, transaction simulation, hardware-wallet support,
+   recovery, backup and incident-response tests.
+3. Obtain written Ugandan legal advice for the exact operating model:
+   exchange, brokerage, custody, transfer, stablecoin issuance, payment
+   processing, consumer protection, AML/CFT and cross-border operations are
+   not interchangeable activities.
+4. FIA's February 2026 publication describes registration of accountable
+   persons under the Anti-Money Laundering Act. Do not treat FIA registration
+   as automatic prudential licensing or as blanket permission to conduct every
+   virtual-asset or payment activity.
+5. Treat fiat deposits, withdrawals, mobile money, bank transfers, custody and
+   exchange execution as separately reviewed integrations. Confirm current
+   Bank of Uganda requirements and restrictions with counsel and the relevant
+   authorities before connecting regulated payment institutions.
+6. Keep the existing SQM issuer hard-disable flags and production launch
+   blockers unchanged. This integration does not approve SQM issuance,
+   redemption, reserves, allocations, or monetary policy.
 
 Official references:
-- https://docs.0x.org/api-reference/api-overview
-- https://docs.0x.org/docs/introduction/quickstart/swap-tokens-with-0x-swap-api
-- https://docs.metamask.io/metamask-connect/
-- https://docs.cosmos.network/
-- https://docs.keplr.app/
 
-## Production/legal/security gates
+- Binance public market data:
+  https://github.com/binance/binance-spot-api-docs/blob/master/faqs/market_data_only.md
+- Binance WebSocket streams:
+  https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md
+- MetaMask Connect:
+  https://docs.metamask.io/metamask-connect/
+- 0x API:
+  https://docs.0x.org/api-reference/api-overview
+- 0x Swap quickstart:
+  https://docs.0x.org/docs/introduction/quickstart/swap-tokens-with-0x-swap-api
+- Skip Go route API:
+  https://github.com/cosmos/docs/blob/main/swagger.yml
+- Cosmos chain registry:
+  https://github.com/cosmos/chain-registry
+- Keplr mobile browser guidance:
+  https://help.keplr.app/mobile-app/5R3bMyjtr3iKzMhqyCqu56/explore-dapps-with-keplr-mobile%E2%80%99s-browser
+- Uganda FIA accountable-person registration:
+  https://fia.go.ug/accountable-persons-to-register-with-fia/
 
-Before real customer funds or fiat rails are supported:
-1. Define the public chain ID, trusted RPC/API endpoints, validator operations,
-   native coin policy, token metadata and audited upgrade process.
-2. Complete an independent wallet/app/chain security review. Add tested
-   transaction simulation, address validation, chain ID checks, phishing
-   protection, hardware-wallet support, and incident response.
-3. Obtain written Ugandan legal advice on the applicable virtual-asset,
-   AML/CFT, custody, transfer, consumer-protection and payment-services duties.
-   The FIA published a February 2026 notice requiring VASPs to register as
-   accountable persons following the relevant Anti-Money Laundering Act
-   schedule amendment. AML registration should not be assumed to replace any
-   other licence or approval that applies to the business model.
-4. Treat fiat deposits, withdrawals, mobile money, bank transfers, custody and
-   exchange execution as separate regulated integrations. The National
-   Payment Systems Act requires a Bank of Uganda licence for covered payment
-   services, payment systems and payment instruments.
-5. Keep the existing SQM issuer hard-disable flags and production launch
-   blockers unchanged. Wallet and market interfaces do not approve issuance,
-   redemption, bank reserves, or monetary policy.
+## Remaining implementation stages
 
-Ugandan references:
-- https://fia.go.ug/amendment-of-the-second-schedule-to-the-anti-money-laundering-act-cap-118/
-- https://ulii.org/en/akn/ug/act/2013/12/eng%402025-02-14
-- https://ulii.org/en/akn/ug/act/2020/15/eng%402023-12-31
-- https://fia.go.ug/virtual-assets-vas-and-virtual-asset-service-providers-vasps-ml-tf-national-risk-assessment-report-2025/
-
-## Next implementation stages
-
-1. Confirm the production/testnet S Coin chain ID and trusted public RPC/API.
-2. Add native Cosmos transaction signing through a maintained wallet SDK, with
-   Keplr first; include send/receive only after address, fee and simulation
-   handling is tested.
-3. Add a native mobile wallet session (MetaMask Connect / WalletConnect) and
-   Cosmos mobile wallet pairing. The current connector intentionally covers
-   browser-injected providers only.
-4. Deploy a protected server-side swap adapter. Add 0x for approved EVM pairs
-   and a Cosmos/IBC aggregator only after S Coin has a valid route and liquidity.
-5. Add authenticated Binance account/order integration only if needed, using
-   user-owned restricted API keys or a properly isolated server-side broker
-   model. Use testnet for validation first.
+1. Configure a trusted S Coin network ID plus RPC/REST and register its chain
+   metadata with Cosmos wallet/chain registries.
+2. Add Cosmos message signing with a maintained wallet SDK and safe transfer
+   construction, fee estimation, simulation, and transaction monitoring.
+3. Integrate MetaMask Connect for native Expo/mobile EVM sessions and a
+   supported Cosmos mobile wallet adapter.
+4. Add audited EVM approval/signing/receipt tracking and a Cosmos/IBC
+   \`/msgs\` execution path only after supported routes and token policies exist.
+5. Independently verify S Coin's listing, liquidity, IBC channels, route
+   provider inclusion, and price impact before enabling S Coin swaps.
+6. Add authenticated Binance Spot Testnet account/order support only if there
+   is a confirmed business need; any production exchange integration needs
+   separate legal, operational and security approvals.
