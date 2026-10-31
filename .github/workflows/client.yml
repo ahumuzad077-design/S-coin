@@ -11,64 +11,7 @@ permissions:
 
 jobs:
 
-  dependency-lockfile-tidy:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Check out pull-request branch
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.ref }}
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Regenerate Go module metadata
-        run: go mod tidy
-
-      - name: Set up Node
-        uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: client/package-lock.json
-
-      - name: Regenerate npm lockfile
-        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund --prefix client
-
-      - name: Commit module metadata repair for this repository branch
-        if: github.event.pull_request.head.repo.full_name == github.repository
-        env:
-          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        run: |
-          if git diff --quiet -- go.mod go.sum client/package-lock.json; then
-            echo "Go and npm dependency metadata is already synchronized."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add go.mod go.sum client/package-lock.json
-          git commit -m "chore(deps): synchronize Go and npm lockfiles [skip ci]"
-          # The feature branch may receive commits while this repair job runs.
-          # Rebase this dependency-only commit onto the latest branch head
-          # before pushing so concurrent client work is not lost.
-          for attempt in 1 2 3; do
-            git fetch origin "${PR_HEAD_REF}"
-            git rebase "origin/${PR_HEAD_REF}"
-            if git push origin "HEAD:${PR_HEAD_REF}"; then
-              exit 0
-            fi
-          done
-          echo "Could not publish dependency metadata after three rebases."
-          exit 1
-
   typecheck-and-web-export:
-    needs: dependency-lockfile-tidy
     runs-on: ubuntu-latest
     defaults:
       run:
