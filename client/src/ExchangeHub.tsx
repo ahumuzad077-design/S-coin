@@ -1091,6 +1091,7 @@ export function ExchangeHub({ chainId, compact, apiUrl }: ExchangeHubProps) {
         </View>
 
         <View style={styles.rightColumn}>
+          <BinanceTestnetPanel selectedMarket={selectedSymbol} />
           <View style={styles.panel}>
             <Text style={styles.eyebrow}>NON-CUSTODIAL CONNECTIONS</Text>
             <Text style={styles.panelTitle}>Connect a wallet</Text>
