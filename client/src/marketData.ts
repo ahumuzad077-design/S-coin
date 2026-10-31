@@ -364,8 +364,8 @@ export interface BinanceMarketDetails {
 export async function fetchBinanceMarketDetails(
   symbol: string,
 ): Promise<BinanceMarketDetails> {
-  if (!knownUsdtMarkets.has(symbol)) {
-    throw new Error("Select a currently trading Binance USDT Spot pair first.");
+  if (!/^[A-Z0-9]+USDT$/.test(symbol)) {
+    throw new Error("Select a valid Binance USDT-quoted Spot pair first.");
   }
 
   const query = "symbol=" + encodeURIComponent(symbol);
