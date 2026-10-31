@@ -678,19 +678,27 @@ export async function createEvmSwapPreview(
   request: EvmSwapExecutionRequest,
 ): Promise<EvmSwapPreview> {
   const quote = request.quote;
+  const sellToken = quote.sellToken;
+  const buyToken = quote.buyToken;
+  const sellAmountText = quote.sellAmount;
+  const buyAmountText = quote.buyAmount;
+  const minBuyAmountText = quote.minBuyAmount;
   validateAddress(request.from, "wallet");
-  validateAddress(quote.sellToken ?? "", "sell token");
-  validateAddress(quote.buyToken ?? "", "buy token");
-  if (!quote.sellAmount || !/^[1-9]\d{0,77}$/.test(quote.sellAmount)) {
+  if (typeof sellToken !== "string" || typeof buyToken !== "string") {
+    throw new Error("The swap quote does not identify both token contracts.");
+  }
+  validateAddress(sellToken, "sell token");
+  validateAddress(buyToken, "buy token");
+  if (typeof sellAmountText !== "string" || !/^[1-9]\d{0,77}$/.test(sellAmountText)) {
     throw new Error("The swap quote contains an invalid sell amount.");
   }
-  if (!quote.buyAmount || !/^[1-9]\d{0,77}$/.test(quote.buyAmount)) {
+  if (typeof buyAmountText !== "string" || !/^[1-9]\d{0,77}$/.test(buyAmountText)) {
     throw new Error("The swap quote contains an invalid buy amount.");
   }
-  if (!quote.minBuyAmount || !/^[1-9]\d{0,77}$/.test(quote.minBuyAmount)) {
+  if (typeof minBuyAmountText !== "string" || !/^[1-9]\d{0,77}$/.test(minBuyAmountText)) {
     throw new Error("The swap quote contains an invalid minimum output.");
   }
-  if (BigInt(quote.minBuyAmount) > BigInt(quote.buyAmount)) {
+  if (BigInt(minBuyAmountText) > BigInt(buyAmountText)) {
     throw new Error("The swap quote minimum output exceeds its estimated output.");
   }
   if (quote.liquidityAvailable !== true || quote.issues?.simulationIncomplete === true) {
@@ -737,8 +745,8 @@ export async function createEvmSwapPreview(
     amount: "1",
   });
   await Promise.all([
-    assertContractExists(provider, quote.sellToken, "sell token contract"),
-    assertContractExists(provider, quote.buyToken, "buy token contract"),
+    assertContractExists(provider, sellToken, "sell token contract"),
+    assertContractExists(provider, buyToken, "buy token contract"),
     assertContractExists(provider, transaction.to, "0x swap transaction target"),
     assertContractExists(provider, allowanceTarget, "0x allowance spender"),
   ]);
@@ -747,18 +755,18 @@ export async function createEvmSwapPreview(
     readTokenDecimals(provider, quote.sellToken),
     readTokenDecimals(provider, quote.buyToken),
   ]);
-  const sellAmount = BigInt(quote.sellAmount);
-  const buyAmount = BigInt(quote.buyAmount);
-  const minBuyAmount = BigInt(quote.minBuyAmount);
+  const sellAmount = BigInt(sellAmountText);
+  const buyAmount = BigInt(buyAmountText);
+  const minBuyAmount = BigInt(minBuyAmountText);
 
   const [sellBalance, allowance] = await Promise.all([
     readContractUint256(
       provider,
-      quote.sellToken,
+      sellToken,
       uint256CallData("0x70a08231", request.from),
       "sell token balance",
     ),
-    readAllowance(provider, quote.sellToken, request.from, allowanceTarget),
+    readAllowance(provider, sellToken, request.from, allowanceTarget),
   ]);
   if (sellBalance < sellAmount) {
     throw new Error("The connected wallet has insufficient sell-token balance.");
