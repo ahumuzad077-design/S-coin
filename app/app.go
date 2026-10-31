@@ -90,7 +90,7 @@ type App struct {
 	AuthzKeeper           authzkeeper.Keeper
 	ConsensusParamsKeeper consensuskeeper.Keeper
 	CircuitBreakerKeeper  circuitkeeper.Keeper
-	ParamsKeeper          paramskeeper.Keeper
+	ParamsKeeper          paramskeeper.Keeper //nolint:staticcheck // The Cosmos SDK app still uses params subspaces for legacy module configuration.
 
 	// ibc keepers
 	IBCKeeper           *ibckeeper.Keeper
@@ -179,7 +179,7 @@ func New(
 		&app.AuthzKeeper,
 		&app.ConsensusParamsKeeper,
 		&app.CircuitBreakerKeeper,
-		&app.ParamsKeeper,
+		&app.ParamsKeeper, //nolint:staticcheck // Required by the current SDK subspace wiring below.
 		&app.ScoinKeeper,
 	); err != nil {
 		panic(err)
@@ -227,7 +227,7 @@ func New(
 
 // GetSubspace returns a param subspace for a given module name.
 func (app *App) GetSubspace(moduleName string) paramstypes.Subspace {
-	subspace, _ := app.ParamsKeeper.GetSubspace(moduleName)
+	subspace, _ := app.ParamsKeeper.GetSubspace(moduleName) //nolint:staticcheck // Retained for the current SDK module parameter compatibility.
 	return subspace
 }
 
