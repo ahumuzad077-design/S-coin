@@ -42,6 +42,33 @@ function tokenAllowlist(value = "{}") {
   return result;
 }
 
+
+function addressAllowlist(value = "{}", name = "ADDRESS_ALLOWLIST_JSON") {
+  let parsed;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error(name + " must be valid JSON");
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error(name + " must be an object keyed by chain ID");
+  }
+  const result = new Map();
+  for (const [chainId, addresses] of Object.entries(parsed)) {
+    if (!/^\\d+$/.test(chainId) || !Array.isArray(addresses)) {
+      throw new Error(name + " entries must map numeric chain IDs to address arrays");
+    }
+    const normalized = addresses.map((address) => {
+      if (typeof address !== "string" || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+        throw new Error(name + " contains an invalid EVM contract address");
+      }
+      return address.toLowerCase();
+    });
+    result.set(chainId, new Set(normalized));
+  }
+  return result;
+}
+
 export function validateEvmQuoteRequest(body, config) {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     throw new Error("Request body must be a JSON object");
@@ -183,6 +210,7 @@ function pickEvmQuoteFields(payload) {
     sellToken: payload.sellToken,
     buyToken: payload.buyToken,
     sellAmount: payload.sellAmount,
+    taker: payload.taker,
     buyAmount: payload.buyAmount,
     minBuyAmount: payload.minBuyAmount,
     liquidityAvailable: payload.liquidityAvailable,
@@ -211,6 +239,15 @@ export function createSwapApiServer(env = process.env, fetchImpl = fetch) {
     evmChainIds: new Set(csv(env.SWAP_ALLOWED_EVM_CHAIN_IDS)),
     cosmosChainIds: new Set(csv(env.SWAP_ALLOWED_COSMOS_CHAIN_IDS)),
     tokensByChain: tokenAllowlist(env.SWAP_ALLOWED_TOKENS_JSON ?? "{}"),
+    swapExecutionEnabled: env.SWAP_EVM_EXECUTION_ENABLED === "true",
+    transactionTargetsByChain: addressAllowlist(
+      env.SWAP_ALLOWED_EVM_TRANSACTION_TARGETS_JSON ?? "{}",
+      "SWAP_ALLOWED_EVM_TRANSACTION_TARGETS_JSON",
+    ),
+    allowanceTargetsByChain: addressAllowlist(
+      env.SWAP_ALLOWED_EVM_ALLOWANCE_TARGETS_JSON ?? "{}",
+      "SWAP_ALLOWED_EVM_ALLOWANCE_TARGETS_JSON",
+    ),
     allowedOrigins: new Set(csv(env.SWAP_API_ALLOWED_ORIGINS)),
     rateLimit:
       Number.isInteger(configuredRateLimit) && configuredRateLimit > 0
@@ -271,6 +308,7 @@ export function createSwapApiServer(env = process.env, fetchImpl = fetch) {
       json(response, 200, {
         status: "ok",
         evmQuoteEnabled: Boolean(config.zeroXApiKey && config.evmChainIds.size && config.tokensByChain.size),
+        evmSwapExecutionConfigured: Boolean(config.swapExecutionEnabled),
         cosmosRoutePreviewEnabled: config.cosmosChainIds.size > 0,
         transactionBroadcastEnabled: false,
       });
@@ -348,11 +386,32 @@ export function createSwapApiServer(env = process.env, fetchImpl = fetch) {
           return;
         }
         const upstreamPayload = await upstream.json();
+        const pickedQuote = pickEvmQuoteFields(upstreamPayload);
+        const transactionTargets = config.transactionTargetsByChain.get(quoteRequest.chainId);
+        const allowanceTargets = config.allowanceTargetsByChain.get(quoteRequest.chainId);
+        const allowanceTarget = String(
+          pickedQuote.issues?.allowance?.spender ?? pickedQuote.allowanceTarget ?? "",
+        ).toLowerCase();
+        const executionEnabled = Boolean(
+          config.swapExecutionEnabled &&
+          transactionTargets?.has(pickedQuote.transaction.to.toLowerCase()) &&
+          allowanceTargets?.has(allowanceTarget) &&
+          pickedQuote.chainId !== undefined &&
+          String(pickedQuote.chainId) === quoteRequest.chainId &&
+          typeof pickedQuote.taker === "string" &&
+          pickedQuote.taker.toLowerCase() === quoteRequest.taker.toLowerCase() &&
+          pickedQuote.sellToken?.toLowerCase() === quoteRequest.sellToken.toLowerCase() &&
+          pickedQuote.buyToken?.toLowerCase() === quoteRequest.buyToken.toLowerCase() &&
+          pickedQuote.sellAmount === quoteRequest.sellAmount &&
+          pickedQuote.liquidityAvailable === true
+        );
         json(response, 200, {
           provider: "0x",
-          quote: pickEvmQuoteFields(upstreamPayload),
-          executionEnabled: false,
-          notice: "Quote only. No transaction has been signed or broadcast.",
+          quote: pickedQuote,
+          executionEnabled,
+          notice: executionEnabled
+            ? "Wallet execution is enabled only for this explicitly allowlisted chain, token pair and 0x contract set. The connected wallet must still approve."
+            : "Quote preview only. Configure server execution, chain and contract allowlists before wallet execution can be enabled.",
         });
       } catch {
         json(response, 502, { error: "Could not obtain an EVM swap quote" });
