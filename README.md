@@ -237,3 +237,24 @@ updates from Binance's public all-market 24-hour ticker WebSocket stream.
 The selected market detail panel also shows 24 hourly candles, a top-of-book
 snapshot (up to 10 bid and ask levels), and recent trades. These are public
 read-only market-data endpoints; they do not place or settle orders.
+
+
+## Binance Spot Testnet
+
+The Markets screen includes a separate Binance Spot Testnet account and
+trading panel for simulated balances, MARKET/LIMIT orders, order validation,
+open-order cancellation and recent order history. It is pinned to
+https://testnet.binance.vision and has no production API, withdrawals, margin
+or futures route. The API key and secret are entered locally; mobile uses the
+OS secure store and web keeps them in memory for the browser session only.
+Create a dedicated key at https://testnet.binance.vision.
+
+## EVM swap execution
+
+An EVM swap flow is implemented with quote binding, token balance/allowance
+checks, exact sell-amount approvals, transaction simulation, gas estimation
+and separate wallet confirmation. It is deliberately disabled by default in
+both the quote service and the app build. It requires matching chain and
+contract allowlists and an independently reviewed supported 0x network.
+0x swaps are not enabled on Sepolia, and native S Coin swaps are not available
+until the real S Coin network, DEX/IBC route and liquidity are verified.
