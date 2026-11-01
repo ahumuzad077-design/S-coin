@@ -1,17 +1,17 @@
 # S Coin Product Blueprint
 **Product baseline:** 31 October 2026  
 **Repository:** `ahumuzad077-design/S-coin`  
-**Purpose:** Single source of truth for S Coin's multi-exchange, multi-wallet crypto market application.
+**Purpose:** Single source of truth for S Coin's unified crypto, securities-market and AI trading ecosystem.
 
 ## 1. Product definition
 
-S Coin is intended to become a multi-platform crypto market, portfolio, wallet-connection and trading application. It should let users compare markets, connect supported exchange accounts or external wallets, practise with virtual balances, and — only where a provider, network and legal operating model have been approved — submit real transactions.
+S Coin is intended to become a multi-platform financial markets application covering crypto markets and wallets, equities/ETF analysis and trading, and a regulated securities-exchange operating platform. Users should be able to compare market data, connect supported exchange accounts or external wallets, access AI-assisted market analysis and practise with virtual balances. Real-money transactions and securities trading must remain limited to providers, networks and operating models that have been separately approved.
 
 S Coin is not meant to be a Binance-only terminal or a MetaMask clone. Binance and MetaMask are examples of integrations, not the product boundary. The product should be provider-neutral: a user should be able to use a supported exchange or wallet without S Coin pretending that all providers have the same APIs, assets, permissions or demo features.
 
 The app should have its own identity and user experience. It can provide an internal paper-trading account and portfolio without taking custody of users' real funds. An eventual S Coin self-custody wallet is a separate product component requiring its own cryptographic design, audit and recovery model.
 
-## 2. The four distinct systems
+## 2. Financial systems that must remain distinct
 
 These concepts must never be treated as interchangeable:
 
@@ -19,6 +19,8 @@ These concepts must never be treated as interchangeable:
 2. **Blockchain wallets.** A user connects a wallet such as MetaMask or Keplr. The wallet controls the private keys and must independently approve every on-chain transaction. A wallet connection does not create a CEX account.
 3. **Decentralised exchanges (DEXs) and aggregators.** These find on-chain swap routes. A quote is only an estimate; execution requires a supported chain, verified contracts, liquidity, simulation and a user's wallet signature.
 4. **S Coin's internal simulator and future wallet.** Paper balances are invented by the simulator and have no monetary value. A future self-custody wallet would generate and secure real keys; it must not be described as implemented until its complete key, backup, recovery and audit lifecycle exists.
+5. **MERIDIAN securities-exchange operations.** MERIDIAN is the proposed securities-market operator and its issuer-application/compliance system. It is not a crypto exchange, does not issue S Coin, does not custody crypto, and is not authorised to list or trade securities merely because its code is in this repository.
+6. **Sentinel AI trading.** Sentinel is an AI-assisted broker-connected trading service for equities, ETFs and crypto. Orders execute through the configured broker account, not through MERIDIAN. Sentinel is not a securities exchange, custodian or investment adviser.
 
 A CEX-to-CEX transfer is not an instant swap inside a common pool. Moving assets between two custodial exchanges may require a withdrawal, blockchain confirmation and deposit. A cross-chain swap is a different flow again. The interface must show the actual route, fees, expected time and counterparties rather than describe every conversion as "instant".
 
@@ -79,6 +81,27 @@ Current code includes a 0x EVM quote path and a Skip Go Cosmos/IBC route-preview
 The repository currently defines a Cosmos SDK chain scaffold with base denomination `uscoin`, display symbol `S`, and the `scoin` address prefix. The display conversion is 1 S = 1,000,000 uscoin.
 
 This codebase does not establish a public production chain, production chain ID, trusted public RPC, genesis allocations, approved maximum supply, production validators, exchange listing, DEX liquidity, reserve, redemption or market price. The repository's native monetary policy remains undecided and requires formal approval. Do not label S Coin as a stablecoin, fixed-supply asset, cash-backed asset or exchange-listed token without the separate evidence and approvals needed for those claims. Do not conflate S Coin with provisional SQM-UGX / SQM-USD issuer work elsewhere in the repository.
+
+### 3.6 Securities exchange operations — MERIDIAN
+
+- Issuer application intake with company registration particulars and proposed security/capital information.
+- Verified organisation identity, company-scoped applicant access and compliance review.
+- Due-diligence workflow, reviewer decisions, evidence references and append-only audit trail.
+- PostgreSQL persistence, OIDC authentication and TLS 1.3 service configuration.
+- Future regulated exchange modules: approved listings and disclosure, broker/dealer admission, market surveillance, market data, order management, CSD connectivity, clearing and settlement.
+
+The current `exchange/` service implements issuer intake and compliance foundations only. It does not list securities, approve offers, onboard investors/brokers, route or match orders, custody assets, clear or settle trades. Trading remains disabled until CMA authorisation and every operating prerequisite is independently established.
+
+### 3.7 Sentinel AI stocks and crypto trading
+
+- AI-assisted analysis of equities, ETFs and crypto pairs.
+- Alpaca market-data and broker adapters, with configurable stock and crypto universes.
+- Multi-agent analysis, research, risk controls, stop/target management and position monitoring.
+- Trade journaling, learning modules, performance statistics and dashboard.
+- Dedicated service deployment and server-side API access control.
+- Paper trading is the default; live mode requires both explicit operator switches and separate compliance/security approval.
+
+Sentinel is a broker-connected trading tool, not the MERIDIAN exchange. Its broker trades do not become MERIDIAN listings or exchange transactions. It must not be used to imply that users can trade securities listed on a not-yet-authorised market.
 
 ## 4. Simulation is a first-class product
 
@@ -163,7 +186,15 @@ The internal simulator and public market viewer should remain clearly non-custod
 
 ## 9. Truthful implementation inventory (this repository)
 
-### Implemented in the current feature branch
+### Implemented in the current S Coin main/integration branch
+
+- Crypto market and wallet hub: Binance public Spot market data, Binance Spot Testnet order workflows, external EVM/Cosmos wallet connection and gated transaction/quote paths.
+- MERIDIAN issuer operations: OIDC-authenticated issuer applications, company registration verification, compliance review, PostgreSQL persistence and append-only audit trail. No securities trading endpoint is exposed.
+- Sentinel AI service: stock/ETF and crypto AI analysis, Alpaca market/broker integration, risk engine, trade journal, learning/performance modules, authenticated dashboard and default paper mode.
+- S Coin Securities navigation route linking to independently hosted Sentinel and MERIDIAN service entry points.
+- Python CI checks for Sentinel syntax, access controls and paper-mode safeguards; client CI checks for Expo export/typecheck.
+
+### Previously implemented crypto market and wallet capabilities
 
 - Binance public Spot market discovery, market-data snapshots and WebSocket ticker updates.
 - Search/watchlist and market detail data (candles, order-book snapshot and recent trades).

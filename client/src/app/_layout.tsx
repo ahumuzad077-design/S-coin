@@ -8,6 +8,10 @@ export default function RootLayout() {
         name="markets"
         options={{ headerShown: true, title: "S Coin Markets" }}
       />
+      <Stack.Screen
+        name="securities"
+        options={{ headerShown: true, title: "S Coin Securities & AI" }}
+      />
     </Stack>
   );
 }

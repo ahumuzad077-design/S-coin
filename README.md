@@ -270,3 +270,16 @@ both the quote service and the app build. It requires matching chain and
 contract allowlists and an independently reviewed supported 0x network.
 0x swaps are not enabled on Sepolia, and native S Coin swaps are not available
 until the real S Coin network, DEX/IBC route and liquidity are verified.
+
+
+## Securities markets and AI trading
+
+S Coin now includes the MERIDIAN issuer-operations foundation and the Sentinel AI stocks/crypto trading service in this repository:
+
+- `exchange/`: MERIDIAN issuer intake, company verification, compliance review, durable PostgreSQL records and append-only audit events. It is not yet an authorised exchange and exposes no live securities-trading endpoint.
+- `integrations/sentinel/`: Sentinel's AI-assisted multi-asset analysis, Alpaca stock/crypto integration, trading risk engine, journal, learning and performance dashboard. API endpoints require a server-side token. Paper trading is forced unless live mode is separately enabled by an operator.
+- `client/src/app/securities.tsx`: S Coin navigation surface for securities services. Configure optional external service URLs in `client/.env`; never place API keys or secrets in `EXPO_PUBLIC_*` variables.
+
+See [the securities and AI trading integration guide](./docs/stock-markets-and-meridian-integration.md) and the [S Coin product blueprint](./docs/S-COIN-PRODUCT-BLUEPRINT.md) for architecture, operating boundaries and production gates.
+
+The MERIDIAN and Sentinel services remain separate from the Cosmos chain and from the crypto wallet's custody boundary. Securities order routing, matching, settlement, live broker access and public exchange trading remain disabled until the necessary regulatory authorisation, counterparties, security controls and operational readiness are verified.
