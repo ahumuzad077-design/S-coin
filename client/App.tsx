@@ -210,6 +210,13 @@ export default function App() {
                 glyph="↗"
                 onPress={() => router.push("/markets")}
               />
+              <NavButton
+                compact={false}
+                active={false}
+                label="Securities"
+                glyph="▤"
+                onPress={() => router.push("/securities")}
+              />
             </View>
           )}
           {!compact && (
@@ -350,6 +357,13 @@ export default function App() {
                 label="Markets"
                 glyph="↗"
                 onPress={() => router.push("/markets")}
+              />
+              <NavButton
+                compact
+                active={false}
+                label="Securities"
+                glyph="▤"
+                onPress={() => router.push("/securities")}
               />
             </View>
           )}
