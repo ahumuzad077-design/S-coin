@@ -121,6 +121,16 @@ The local RPC ports are `26657`, `26654`, `26651`, and `26648`, respectively.
 Keep them local; do not expose these development nodes to the internet. Press
 `Ctrl+C` in each terminal to stop its validator.
 
+## MERIDIAN real exchange-operator operations
+
+The proposed MERIDIAN securities-market venture is being developed as a separate Go service in [`exchange/`](./exchange/). The first real subsystem supports authenticated issuer applications, company registration particulars, exchange reviewer decisions, durable PostgreSQL storage and append-only audit/application-event records. It contains no synthetic listings, mock prices, paper balances, simulated fills or trading endpoint.
+
+The exchange operations service is separate from the S Coin blockchain and does not use native `uscoin`, SQM-UGX, SQM-USD or issuer reserves as securities, cash balances or settlement assets. The S Coin Expo wallet remains separate; securities exchange administration does not belong inside a cryptocurrency wallet screen.
+
+See [`exchange/README.md`](./exchange/README.md) for database, OIDC, TLS and API requirements, and [`docs/meridian-concept.md`](./docs/meridian-concept.md) for the real exchange establishment programme and regulatory sequence.
+
+**Live-market boundary:** MERIDIAN is not currently an incorporated/approved securities exchange. The first service does not list securities, approve offers, accept investments, onboard licensed brokers, route/match orders, custody assets, clear trades or settle transactions. It reports `tradingEnabled: false` unconditionally. A real market requires the applicable CMA approval and conditions, market rules, suitable capital and governance, authorised trading participants, approved securities central-depository connectivity, clearing/settlement arrangements, surveillance and operational readiness. Do not present an issuer application as an approved listing.
+
 ## Before operating a public testnet
 
 A public testnet needs independently operated validators, a coordinated
