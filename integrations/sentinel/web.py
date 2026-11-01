@@ -40,8 +40,8 @@ def _require_api_authentication():
         return None
     if not request.path.startswith("/api/"):
         return None
-    if not _API_TOKEN:
-        return jsonify({"error": "Sentinel API is not configured with SENTINEL_API_TOKEN."}), 503
+    if len(_API_TOKEN) < 32:
+        return jsonify({"error": "Sentinel API requires a 32-character or longer SENTINEL_API_TOKEN."}), 503
     authorization = request.headers.get("Authorization", "")
     bearer = authorization[7:].strip() if authorization.lower().startswith("bearer ") else ""
     cookie = request.cookies.get(_COOKIE_NAME, "")
@@ -59,6 +59,7 @@ def healthz():
         "service": "scoin-sentinel",
         "status": "ok",
         "liveTradingEnabled": os.environ.get("SENTINEL_LIVE_TRADING_ENABLED", "false").lower() == "true",
+        "authenticationConfigured": len(_API_TOKEN) >= 32,
     })
 
 
@@ -66,8 +67,8 @@ def healthz():
 def api_session():
     data = request.get_json(silent=True) or {}
     candidate = str(data.get("token") or "")
-    if not _API_TOKEN:
-        return jsonify({"error": "Sentinel API is not configured."}), 503
+    if len(_API_TOKEN) < 32:
+        return jsonify({"error": "Sentinel API requires a 32-character or longer access token."}), 503
     if not candidate or not hmac.compare_digest(candidate, _API_TOKEN):
         return jsonify({"error": "Invalid access token."}), 401
     response = make_response(jsonify({"ok": True}))
