@@ -17,6 +17,7 @@ import {
   Platform,
   useWindowDimensions,
 } from "react-native";
+import { useRouter } from "expo-router";
 import {
   AccountTransaction,
   ChainStatus,
@@ -47,6 +48,7 @@ const navigation: { id: Screen; label: string; glyph: string }[] = [
 ];
 
 export default function App() {
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const compact = width < 760;
   const [screen, setScreen] = useState<Screen>("overview");
@@ -201,6 +203,13 @@ export default function App() {
                   onPress={() => setScreen(item.id)}
                 />
               ))}
+              <NavButton
+                compact={false}
+                active={false}
+                label="Markets"
+                glyph="↗"
+                onPress={() => router.push("/markets")}
+              />
             </View>
           )}
           {!compact && (
@@ -335,6 +344,13 @@ export default function App() {
                   onPress={() => setScreen(item.id)}
                 />
               ))}
+              <NavButton
+                compact
+                active={false}
+                label="Markets"
+                glyph="↗"
+                onPress={() => router.push("/markets")}
+              />
             </View>
           )}
         </View>

@@ -8,6 +8,10 @@ This repository is a development/testnet starting point. It is not a launched
 public blockchain, has not been independently audited, and its testnet coins
 have no real-world value.
 
+## Multi-platform product scope
+
+The intended product is a multi-exchange crypto markets and wallet application, not a Binance-only trading terminal. It distinguishes exchange accounts, external blockchain wallets, decentralised swap routes, S Coin's own asset, provider demo environments and S Coin's internal paper-trading simulator. The full product definition, supported-provider status, simulation model, security boundaries and release requirements are documented in [the S Coin product blueprint](./docs/S-COIN-PRODUCT-BLUEPRINT.md).
+
 ## Native SQM policy and production launch status
 
 The source tree is currently named S Coin (`scoin`), not SQM. Its native base
@@ -171,3 +175,88 @@ phone. iOS native builds require macOS or a configured remote build service.
 
 Use only a trusted node endpoint. This app is a development client; it has not
 been security audited and is not suitable for managing real funds.
+
+## Markets and wallet connection hub
+
+The app includes a Markets screen to the Expo
+client. It reads public Binance Spot market data for selected USDT pairs and
+supports browser-injected EVM wallet connections, MetaMask Connect sessions in
+native Android/iOS builds, and Keplr connections for a preconfigured S Coin
+Cosmos chain.
+
+Run the existing app as described above, then open **Markets** in the app
+navigation. No new package installation is required for this initial browser
+integration. Set `EXPO_PUBLIC_SCOIN_CHAIN_ID` to the exact trusted S Coin chain
+ID when one has been established; do not guess or reuse a local test chain ID
+for production.
+
+This is not an independent self-custody vault: S Coin does not generate,
+store or recover seed phrases or private keys. It uses external wallets for
+EVM and Cosmos signing. Native EVM and ERC-20 transfers require external wallet
+approval and are enabled by chain allowlist; native transfers default to
+Sepolia. Browser users can also send native S Coin through Keplr when the exact
+chain ID, trusted RPC and operator-approved gas price have been configured.
+Cosmos sends are disabled by default and Keplr mobile pairing is not configured.
+An EVM swap flow supports separate exact-amount approval and wallet signing,
+but execution is disabled by default on both server and app. Binance trading
+is isolated to its Spot Testnet, with simulated account balances and orders.
+Production Binance trading, deposits and withdrawals are not implemented.
+
+See [wallet and exchange integration notes](./docs/wallet-and-exchange-integration.md)
+for the architecture, security boundary, regulatory readiness and next stages.
+Do not use this client to manage real funds; independent security review and
+production readiness gates remain outstanding.
+
+## Markets, wallet and quote service
+
+The Markets screen now includes a Binance public REST snapshot plus a
+reconnecting public WebSocket feed, search, local watchlist and 24-hour market
+metrics. See `client/.env.example` for the public endpoint settings.
+
+The app also includes a service in `server/swap-api/` with a
+0x EVM quote endpoint and a Skip Go Cosmos/IBC route-preview endpoint. EVM swap
+execution is gated off by default and requires exact server and app chain,
+token, transaction-target and allowance-spender allowlists. Keep
+`ZEROX_API_KEY` on the server. Configure only the public HTTPS service URL in
+`EXPO_PUBLIC_SWAP_API_URL`.
+
+The app reads native balances for connected EVM and S Coin accounts where a
+trusted endpoint responds. It supports externally approved native EVM and
+ERC-20 transfers, browser Keplr sends of native S Coin when explicit operator
+configuration is present, and EVM swaps when both allowlists are explicitly
+enabled. Binance account/order functions are restricted to Spot Testnet.
+MetaMask Connect is available in native EVM builds; native Keplr mobile pairing
+remains future work. S Coin still has no verified production network or
+registered DEX/IBC swap route. See
+[`docs/wallet-and-exchange-integration.md`](./docs/wallet-and-exchange-integration.md)
+and [`server/swap-api/README.md`](./server/swap-api/README.md).
+
+The market screen now discovers active Binance Spot markets quoted in USDT from
+Binance exchange metadata, ranks them by 24-hour quote volume, and supports
+search across the full discovered set. It shows the top 100 by default and
+updates from Binance's public all-market 24-hour ticker WebSocket stream.
+
+The selected market detail panel also shows 24 hourly candles, a top-of-book
+snapshot (up to 10 bid and ask levels), and recent trades. These are public
+read-only market-data endpoints; they do not place or settle orders.
+
+
+## Binance Spot Testnet
+
+The Markets screen includes a separate Binance Spot Testnet account and
+trading panel for simulated balances, MARKET/LIMIT orders, order validation,
+open-order cancellation and recent order history. It is pinned to
+https://testnet.binance.vision and has no production API, withdrawals, margin
+or futures route. The API key and secret are entered locally; mobile uses the
+OS secure store and web keeps them in memory for the browser session only.
+Create a dedicated key at https://testnet.binance.vision.
+
+## EVM swap execution
+
+An EVM swap flow is implemented with quote binding, token balance/allowance
+checks, exact sell-amount approvals, transaction simulation, gas estimation
+and separate wallet confirmation. It is deliberately disabled by default in
+both the quote service and the app build. It requires matching chain and
+contract allowlists and an independently reviewed supported 0x network.
+0x swaps are not enabled on Sepolia, and native S Coin swaps are not available
+until the real S Coin network, DEX/IBC route and liquidity are verified.

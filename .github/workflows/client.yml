@@ -1,0 +1,61 @@
+name: Client checks
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - "client/**"
+      - ".github/workflows/client.yml"
+
+permissions:
+  contents: read
+
+jobs:
+
+  typecheck-and-web-export:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - name: Check out pull-request branch
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Test EVM transfer validation and wallet calls
+        run: npm run test:wallet
+
+      - name: Test Binance Spot Testnet API signing and orders
+        run: npm run test:binance
+
+      - name: Test EVM quote binding and response validation
+        run: npm run test:swap
+
+      - name: Test native S Coin transfer parsing
+        run: npm run test:cosmos
+
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit
+
+      - name: Export web application
+        run: npx expo export --platform web --output-dir dist-web
+
+      - name: Bundle Android native application
+        run: npx expo export --platform android --output-dir dist-android
+
+      - name: Bundle iOS native application
+        run: npx expo export --platform ios --output-dir dist-ios
