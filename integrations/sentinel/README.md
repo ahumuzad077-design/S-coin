@@ -24,7 +24,7 @@ cp .env.example .env
 python web.py
 ```
 
-Configure secrets through the hosting platform's secret manager. Set a strong random `SENTINEL_API_TOKEN`. The HTML dashboard uses a short-lived HttpOnly session cookie after the token is entered; API clients may send the token as a Bearer credential. All endpoints under `/api/` require authentication except the login endpoint. `/healthz` exposes only service health and the live-trading capability flag.
+Configure secrets through the hosting platform's secret manager. Set a strong random `SENTINEL_API_TOKEN`. The HTML dashboard exchanges the token for a short-lived HttpOnly, SameSite=Strict session cookie; the token is held only in the password field during login and is not kept in browser storage. Trusted server-to-server API clients may send the token as a Bearer credential. All endpoints under `/api/` require authentication except the login endpoint. `/healthz` exposes only service health and the live-trading capability flag.
 
 ## Trading safety
 
