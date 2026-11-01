@@ -125,16 +125,16 @@ canvas{width:100%;display:block;background:var(--panel);border-radius:4px}
 <script>
 const $ = id => document.getElementById(id);
 
-let sentinelToken = sessionStorage.getItem("scoinSentinelToken") || "";
+let sentinelConnected = false;
 
 async function apiFetch(url, options = {}) {
   const headers = new Headers(options.headers || {});
-  if (sentinelToken) headers.set("Authorization", "Bearer " + sentinelToken);
   const response = await fetch(url, {...options, headers, credentials: "same-origin"});
-  if (response.status === 401) {
-    sentinelToken = "";
-    sessionStorage.removeItem("scoinSentinelToken");
-    $("authStatus").textContent = "Access expired — reconnect";
+  if (response.status === 401 || response.status === 503) {
+    sentinelConnected = false;
+    $("authStatus").textContent = response.status === 401
+      ? "Session expired — reconnect"
+      : "API access is not configured";
   }
   return response;
 }
@@ -156,10 +156,9 @@ async function connectSentinel() {
       $("authStatus").textContent = "Authentication failed (" + response.status + ")";
       return;
     }
-    sentinelToken = token;
-    sessionStorage.setItem("scoinSentinelToken", token);
+    sentinelConnected = true;
     $("tokenInput").value = "";
-    $("authStatus").textContent = "Connected · session protected";
+    $("authStatus").textContent = "Connected · secure HttpOnly session";
     await tick();
   } catch (error) {
     $("authStatus").textContent = "Connection failed";
@@ -170,8 +169,7 @@ async function disconnectSentinel() {
   try {
     await apiFetch("/api/session", {method: "DELETE", credentials: "same-origin"});
   } finally {
-    sentinelToken = "";
-    sessionStorage.removeItem("scoinSentinelToken");
+    sentinelConnected = false;
     $("authStatus").textContent = "Disconnected";
   }
 }
