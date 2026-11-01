@@ -1,56 +1,96 @@
-# This workflow is useful if you want to automate the process of:
-#
-# a) Creating a new prelease when you push a new tag with a "v" prefix (version).
-#
-#    This type of prerelease is meant to be used for production: alpha, beta, rc, etc. types of releases.
-#    After the prerelease is created, you need to make your changes on the release page at the relevant
-#    Github page and publish your release.
-#
-# b) Creating/updating the "latest" prerelease when you push to your default branch.
-#
-#    This type of prelease is useful to make your bleeding-edge binaries available to advanced users.
-#
-# The workflow will not run if there is no tag pushed with a "v" prefix and no change pushed to your
-# default branch.
-on: push
+name: Build and publish S Coin binaries
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
 
 jobs:
-  might_release:
+  build-and-release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout source
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Prepare Release Variables
-        id: vars
-        uses: ignite/cli/actions/release/vars@main
-
-      - name: Issue Release Assets
-        uses: ignite/cli/actions/cli@main
-        if: ${{ steps.vars.outputs.should_release == 'true' }}
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          args: chain build --release --release.prefix ${{ steps.vars.outputs.tarball_prefix }} -t linux:amd64 -t darwin:amd64 -t darwin:arm64 -y
-        env:
-          DO_NOT_TRACK: 1
-          GOFLAGS: "-buildvcs=false"
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
 
-      - name: Delete the "latest" Release
+      - name: Prepare release variables
+        id: vars
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo_name="${GITHUB_REPOSITORY##*/}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            tag_name="${GITHUB_REF_NAME}"
+            is_latest=false
+            prerelease=true
+          else
+            tag_name="latest"
+            is_latest=true
+            prerelease=true
+          fi
+          echo "tag_name=${tag_name}" >> "${GITHUB_OUTPUT}"
+          echo "tarball_prefix=${repo_name}-${tag_name}" >> "${GITHUB_OUTPUT}"
+          echo "is_latest=${is_latest}" >> "${GITHUB_OUTPUT}"
+          echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build Linux and macOS binaries
+        env:
+          GOFLAGS: "-buildvcs=false"
+          VERSION: ${{ steps.vars.outputs.tag_name }}
+          COMMIT: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release build
+          ldflags="-X github.com/cosmos/cosmos-sdk/version.Name=scoin -X github.com/cosmos/cosmos-sdk/version.AppName=scoind -X github.com/cosmos/cosmos-sdk/version.Version=${VERSION} -X github.com/cosmos/cosmos-sdk/version.Commit=${COMMIT}"
+
+          for target in "linux/amd64" "darwin/amd64" "darwin/arm64"; do
+            goos="${target%/*}"
+            goarch="${target#*/}"
+            build_dir="build/${goos}-${goarch}"
+            mkdir -p "${build_dir}"
+
+            echo "Building ${goos}/${goarch}"
+            GOOS="${goos}" GOARCH="${goarch}" CGO_ENABLED=0 \
+              go build -mod=readonly -trimpath -ldflags "${ldflags}" \
+              -o "${build_dir}/scoind" ./cmd/scoind
+
+            archive="${{ steps.vars.outputs.tarball_prefix }}-${goos}-${goarch}.tar.gz"
+            tar -C "${build_dir}" -czf "release/${archive}" scoind
+          done
+
+          (
+            cd release
+            sha256sum *.tar.gz > SHA256SUMS.txt
+          )
+
+      - name: Delete previous latest release
+        if: ${{ steps.vars.outputs.is_latest == 'true' }}
         uses: dev-drprasad/delete-tag-and-release@v0.2.1
-        if: ${{ steps.vars.outputs.is_release_type_latest == 'true' }}
         with:
           tag_name: ${{ steps.vars.outputs.tag_name }}
           delete_release: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish the Release
+      - name: Publish prerelease
         uses: softprops/action-gh-release@v1
-        if: ${{ steps.vars.outputs.should_release == 'true' }}
         with:
           tag_name: ${{ steps.vars.outputs.tag_name }}
           files: release/*
-          prerelease: true
+          prerelease: ${{ steps.vars.outputs.prerelease }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
