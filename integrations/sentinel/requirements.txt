@@ -1,0 +1,7 @@
+alpaca-py
+openai
+python-dotenv
+numpy
+flask
+gunicorn
+youtube-transcript-api>=1.2.0
