@@ -1,0 +1,39 @@
+name: Release build compatibility check
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+      - ".github/workflows/release-build-check.yml"
+      - "cmd/scoind/**"
+      - "go.mod"
+      - "go.sum"
+
+permissions:
+  contents: read
+
+jobs:
+  cross-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+      - name: Cross-compile release targets
+        env:
+          GOFLAGS: "-buildvcs=false"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          for target in "linux/amd64" "darwin/amd64" "darwin/arm64"; do
+            goos="${target%/*}"
+            goarch="${target#*/}"
+            GOOS="${goos}" GOARCH="${goarch}" CGO_ENABLED=0 \
+              go build -mod=readonly -trimpath -o "build/scoind-${goos}-${goarch}" ./cmd/scoind
+          done
